@@ -11,6 +11,8 @@ import exifread.classes
 import pandas as pd
 from PIL import Image, ImageTk
 import exifread
+from pyexiv2 import Image as ImgMeta
+import re
 
 
 
@@ -26,6 +28,10 @@ class MultiColumnListbox(TkinterDnD.Tk):
         self._load_personal_config()
 
     def _setup_widgets(self):
+        ico = Image.open('config/icon.png')
+        photo = ImageTk.PhotoImage(ico)
+        self.wm_iconphoto(False, photo)
+
         self.drop_target_register(DND_FILES)
         self.dnd_bind('<<Drop>>', self._dnd_files)
         
@@ -67,25 +73,25 @@ class MultiColumnListbox(TkinterDnD.Tk):
             self.bottom_frame.grid_columnconfigure(col, weight=1)
         self.tree.bind("<ButtonRelease-1>", self._row_selected)
 
-        self.family_defalt = ['0-Fam']
+        self.family_defalt = '0-Fam'
         ttk.Label(self.bottom_frame, text="Family").grid(row=0, column=0, padx=5, pady=2, sticky='ew')
-        self.cb_family = ttk.Combobox(self.bottom_frame, values=self.family_defalt + sorted(self.fish_df['Family'].unique()), state='readonly')
+        self.cb_family = ttk.Combobox(self.bottom_frame, values=[self.family_defalt] + sorted(self.fish_df['Family'].unique()), state='readonly')
         self.cb_family.grid(row=1, column=0, padx=5, pady=2, sticky='ew')
         self.cb_family.bind("<<ComboboxSelected>>", self.set_family)
         self.cb_family.current(0)
         self.cb_family.state(['disabled'])
 
-        self.genus_default = ['genus']
+        self.genus_default = 'genus'
         ttk.Label(self.bottom_frame, text="Genus").grid(row=0, column=1, padx=5, pady=2, sticky='ew')
-        self.cb_genus = ttk.Combobox(self.bottom_frame, values=self.genus_default + sorted(self.fish_df['Genus'].unique()), state='readonly')
+        self.cb_genus = ttk.Combobox(self.bottom_frame, values=[self.genus_default] + sorted(self.fish_df['Genus'].unique()), state='readonly')
         self.cb_genus.grid(row=1, column=1, padx=5, pady=2, sticky='ew')
         self.cb_genus.bind("<<ComboboxSelected>>", self.set_genus)
         self.cb_genus.current(0)
         self.cb_genus.state(['disabled'])
 
-        self.species_default = ['spec']
+        self.species_default = 'spec'
         ttk.Label(self.bottom_frame, text="Species").grid(row=0, column=2, padx=5, pady=2, sticky='ew')
-        self.cb_species = ttk.Combobox(self.bottom_frame, values=self.species_default + sorted(self.fish_df['Species'].unique()), state='readonly')
+        self.cb_species = ttk.Combobox(self.bottom_frame, values=[self.species_default] + sorted(self.fish_df['Species'].unique()), state='readonly')
         self.cb_species.grid(row=1, column=2, padx=5, pady=2, sticky='ew')
         self.cb_species.bind("<<ComboboxSelected>>", self.set_species)
         self.cb_species.current(0)
@@ -153,6 +159,11 @@ class MultiColumnListbox(TkinterDnD.Tk):
         #self.cb_activity.current(0)
         self.cb_activity.bind("<<ComboboxSelected>>", self._save_personal_config)
 
+        # create a textblock that is used for displaying status messages
+        self.status = tk.Text(self.bottom_frame, height=3, width=1, font=("Arial", 8))
+        self.status.grid(row=4, column=3, padx=5, pady=2, sticky='ew', rowspan=3)
+        self.status.insert(tk.END, "Ready")
+
     def _save_personal_config(self, event):
         with open("config/conf.conf", "w") as f:
             f.write(f"{self.cb_author.get()}\n")
@@ -168,11 +179,11 @@ class MultiColumnListbox(TkinterDnD.Tk):
         else:
             self
 
-    def open_popup(self):
+    def open_popup(self, content):
         top = tk.Toplevel(self)
-        top.geometry("200x100")
+        top.geometry("250x100")
         top.title("Alert")
-        tk.Label(top, text= "Please enter\nAuthor and Site", font=("Arial", 20)).pack()
+        tk.Label(top, text=content).pack()
         # location should be in the middle of the top level window
         x = (top.winfo_screenwidth() - top.winfo_reqwidth()) / 2
         y = (top.winfo_screenheight() - top.winfo_reqheight()) / 2
@@ -197,11 +208,29 @@ class MultiColumnListbox(TkinterDnD.Tk):
             f = open(path, 'rb')
             tags = exifread.process_file(f)
             return tags['Image DateTime'].printable.replace(' ', '_').replace(':', '-')
+        
+    def _process_exif(self, path):
+        img = ImgMeta(path)
+        exif = img.read_exif()
+        date = exif['Exif.Photo.DateTimeOriginal']
+
+        # location, site = self.cb_area.get().split(", ")
+        # lat, lon = self.divesites_df[(self.divesites_df['Location'] == location) & (self.divesites_df['Site'] == site)][['latitude', 'longitude']].values[0]
+
+        # img.modify_exif({'Exif.GPSInfo.GPSLatitude': (lat, 1), 'Exif.GPSInfo.GPSLatitudeRef': 'N', 'Exif.GPSInfo.GPSLongitude': (lon, 1), 'Exif.GPSInfo.GPSLongitudeRef': 'E'})
+        return date.replace(' ', '_').replace(':', '-')
                 
     def _assemble_filename_name_site_datetime_activity(self, path):
         filepath, extension = os.path.splitext(path)
-        filename = os.path.basename(filepath).replace('_', '')
-        filedate = self._get_filedate_str(path)
+        filename = os.path.basename(filepath)
+        
+        if re.match(r'.*[A-Za-z]{5}_[A-Z]{3}-[A-Za-z]+-[A-Z0-9]{3}_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_[A-Za-z]+_[A-Za-z0-9]+', filename):
+            return None
+
+        filename = filename.replace('_', '')
+        filedate = self._process_exif(path)
+        #filedate = self._get_filedate_str(path)
+
         author = self.cb_author.get()
         author_code = self.users_df[self.users_df['Full name'] == author]['Namecode'].values[0]
         site = self.cb_area.get()
@@ -213,6 +242,10 @@ class MultiColumnListbox(TkinterDnD.Tk):
     def _assemble_filename_family_genus_species_details(self, path):
         filepath, extension = os.path.splitext(path)
         filename = os.path.basename(filepath)
+
+        if re.match(r'0?\-?[A-Za-z]*_[A-Za-z]+_[a-z]+_[A-Z]_[a-z]{2}_[A-Za-z]+_[A-Za-z\-]+_[A-Za-z\-]+_[A-Za-z]{5}_[A-Z]{3}-[A-Za-z]+-[A-Z0-9]{3}_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_[A-Za-z]+_[A-Za-z0-9]+', filename):
+            return None
+
         family = self.cb_family.get()
         genus = self.cb_genus.get()
         species = self.cb_species.get()
@@ -223,16 +256,32 @@ class MultiColumnListbox(TkinterDnD.Tk):
 
         return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{filename}{extension}"
 
+    def _warn(self, text):
+        # set background of self.status to red and display the text
+        self.status.delete(1.0, tk.END)
+        self.status.insert(1.0, text)
+        self.status.config(foreground="red")
 
     def _dnd_files(self, event):
         files = self.splitlist(event.data)
         if not self._check_if_essential_info_set(): return
+
+        not_renamed = 0
+
         for file in files:
             if self.fish_identification.get() == 0:
                 filename = self._assemble_filename_name_site_datetime_activity(file)
             else:
                 filename = self._assemble_filename_family_genus_species_details(file)
+            if filename is None:
+                not_renamed += 1
+                continue
             os.rename(file, os.path.join(os.path.dirname(file), filename))
+        
+        if not_renamed > 0:
+            self._warn(f"{not_renamed} file(s) were not renamed.\nThey might have been renamed already.")
+            #self.open_popup(f"{not_renamed} files were not renamed.\nThey might have been renamed already.")
+
 
     def _row_selected(self, event):
         item = self.tree.selection()[0]
@@ -272,27 +321,33 @@ class MultiColumnListbox(TkinterDnD.Tk):
         family = self.cb_family.get()
         filtered = self.fish_df[self.fish_df['Family'] == family]
         self.cb_family.set(family)
-        self.cb_genus['values'] = self.genus_default + sorted(filtered['Genus'].unique())
+        self.cb_genus['values'] = [self.genus_default] + sorted(filtered['Genus'].unique())
         self.cb_genus.current(0)
-        self.cb_species['values'] = self.species_default + sorted(filtered['Species'].unique())
+        self.cb_species['values'] = [self.species_default] + sorted(filtered['Species'].unique())
         self.cb_species.current(0)
         self.clear_tree()
         self.fill_tree(filtered.values.tolist())
 
     def set_genus(self, event):
         genus = self.cb_genus.get()
-        filtered = self.fish_df[self.fish_df['Genus'] == genus]
+        if genus == self.genus_default:
+            filtered = self.fish_df[self.fish_df['Family'] == self.cb_family.get()]
+        else:
+            filtered = self.fish_df[self.fish_df['Genus'] == genus]
         family = filtered['Family'].iloc[0]
         self.cb_family.set(family)
         self.cb_genus.set(genus)
-        self.cb_species['values'] = self.species_default + sorted(filtered['Species'].unique())
+        self.cb_species['values'] = [self.species_default] + sorted(filtered['Species'].unique())
         self.cb_species.current(0)
         self.clear_tree()
         self.fill_tree(filtered.values.tolist())
 
     def set_species(self, event):
         species = self.cb_species.get()
-        filtered = self.fish_df[self.fish_df['Species'] == species]
+        if species == self.species_default:
+            filtered = self.fish_df[self.fish_df['Genus'] == self.cb_genus.get()]
+        else:
+            filtered = self.fish_df[self.fish_df['Species'] == species]
         genus = filtered['Genus'].iloc[0]
         family = filtered['Family'].iloc[0]
         self.cb_genus.set(genus)
