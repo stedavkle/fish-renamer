@@ -1,0 +1,4 @@
+tkinterdnd2
+pyexiv2
+pandas
+pillow
