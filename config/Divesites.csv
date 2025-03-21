@@ -1,0 +1,60 @@
+Site string;Country;Location;Site;Site code;latitude;longitude
+IDN-Bangka-AKP;IDN;Bangka;Areng Kambing Pasir;AKP;1.76885;125.17675
+IDN-Bangka-AKW;IDN;Bangka;Areng Kambing Wall;AKW;1.76828;125.17596
+IDN-Bangka-BAN;IDN;Bangka;Batu Angus;BAN;1.78149;125.18897
+IDN-Bangka-BBE;IDN;Bangka;Batu Belah;BBE;1.77198;125.18195
+IDN-Bangka-BGO;IDN;Bangka;Batu Gosoh;BGO;1.79949;125.18834
+IDN-Bangka-BGB;IDN;Bangka;Batu Gosoh Beach;BGB;1.7993;125.18633
+IDN-Bangka-BGT;IDN;Bangka;Batu Gosoh Towers;BGT;1.8011;125.1881
+IDN-Bangka-BTA;IDN;Bangka;Batu Tartaruga;BTA;1.78816;125.18759
+IDN-Bangka-BTI;IDN;Bangka;Batu Tiga;BTI;1.76605;125.17182
+IDN-Bangka-BTO;IDN;Bangka;Batu Toto;BTO;1.77468;125.18602
+IDN-Bangka-BKU;IDN;Bangka;Buluh Kuning;BKU;1.75851;125.131
+IDN-Bangka-BBB;IDN;Bangka;Busa Bora Barat;BBB;1.74621;125.13657
+IDN-Bangka-BBK;IDN;Bangka;Busa Bora Kampung;BBK;1.74511;125.13977
+IDN-Bangka-BBT;IDN;Bangka;Busa Bora Timur;BBT;1.73941;125.1445
+IDN-Bangka-HRJ;IDN;Bangka;Coral Eye House Reef Jetty;HRJ;1.75103;125.13304
+IDN-Bangka-HRN;IDN;Bangka;Coral Eye House Reef North;HRN;1.75136;125.13261
+IDN-Bangka-HRS;IDN;Bangka;Coral Eye House Reef South;HRS;1.74973;125.13368
+IDN-Bangka-KAH;IDN;Bangka;Kahuku;KAH;1.79773;125.11845
+IDN-Bangka-LHG;IDN;Bangka;Lihunu's Garden;LHG;1.75388;125.15072
+IDN-Bangka-LIN;IDN;Bangka;Linggua;LIN;1.76335;125.13036
+IDN-Bangka-MF1;IDN;Bangka;Mangrove Forest 1;MF1;1.75512;125.13298
+IDN-Bangka-MUX;IDN;Bangka;Murex House Reef;MUX;1.73467;125.14946
+IDN-Bangka-PFA;IDN;Bangka;Pearl Farm;PFA;1.81134;125.1132
+IDN-Bangka-PSA;IDN;Bangka;Pulau Sahaung;PSA;1.74419;125.15362
+IDN-Bangka-SA1;IDN;Bangka;Sahaung 1;SA1;1.74157;125.16362
+IDN-Bangka-SA2;IDN;Bangka;Sahaung 2;SA2;1.74325;125.1628
+IDN-Bangka-SBY;IDN;Bangka;Sahaung Bay;SBY;1.74652;125.15611
+IDN-Bangka-SBM;IDN;Bangka;Sahaung Bay Mangroves;SBM;1.74717;125.1507
+IDN-Bangka-SBW;IDN;Bangka;Sahaung Bay West;SBW;1.74441;125.14912
+IDN-Bangka-SIP;IDN;Bangka;Sipi;SIP;1.77072;125.13056
+IDN-Bangka-TH1;IDN;Bangka;Tanjung Husi 1;TH1;1.73554;125.15189
+IDN-Bangka-TH2;IDN;Bangka;Tanjung Husi 2;TH2;1.73755;125.15199
+IDN-Bangka-TCH;IDN;Bangka;The Channel;TCH;1.82002;125.12034
+IDN-Bangka-DKA;IDN;Bunaken;Depan Kampung;DKA;1.59374;124.77554
+IDN-Bangka-LE1;IDN;Bunaken;Lekuan 1;LE1;1.59466;124.77287
+IDN-Bangka-LE2;IDN;Bunaken;Lekuan 2;LE2;1.59565;124.76845
+IDN-Bangka-LE3;IDN;Bunaken;Lekuan 3;LE3;1.60159;124.76553
+IDN-Bangka-TI1;IDN;Bunaken;Timur 2;TI1;1.61046;124.78298
+IDN-Bangka-LAK;IDN;Gangga;Lakehe;LAK;1.77143;125.05984
+IDN-Bangka-AB1;IDN;Lembeh;Aer Bajo 1;AB1;1.48192;125.25325
+IDN-Bangka-AB2;IDN;Lembeh;Aer Bajo 2;AB2;1.48374;125.25516
+IDN-Bangka-AB3;IDN;Lembeh;Aer Bajo 3;AB3;1.48587;125.25621
+IDN-Bangka-MAS;IDN;Lembeh;Makawidey south;MAS;1.48064;125.23854
+IDN-Bangka-RKA;IDN;Lembeh;Retak Larry;RKA;1.49375;125.23717
+IDN-Bangka-ROJ;IDN;Lembeh;Rojos;ROJ;1.48876;125.25731
+IDN-Bangka-TK2;IDN;Lembeh;Tiki 2;TK2;1.49049;125.23665
+IDN-Bangka-BMA;IDN;Pulisan;Batu Mandi;BMA;1.68782;125.16176
+IDN-Bangka-EFR;IDN;Pulisan;Efrata;EFR;1.68039;125.15334
+IDN-Bangka-SE1;IDN;Pulisan;Sempini 1;SE1;1.68457;125.14211
+IDN-Bangka-SE2;IDN;Pulisan;Sempini 2;SE2;1.68343;125.14086
+IDN-Bangka-TKK;IDN;Pulisan;Tanjung Kusu Kusu;TKK;1.68933;125.16509
+IDN-Bangka-TPA;IDN;Pulisan;Tanjung Paradise;TPA;1.67416;125.11824
+IDN-Bangka-YKO;IDN;Pulisan;Yellow Koko;YKO;1.6721;125.1333
+IDN-Bangka-JMA;IDN;Siladen;Jalan Masuk;JMA;1.58084;124.81127
+IDN-Bangka-SJE;IDN;Siladen;Siladen Jetty;SJE;1.62708;124.80106
+IDN-Bangka-BCA;IDN;Talisei;Batu Cahaya;BCA;1.87404;125.09805
+IDN-Bangka-KIN;IDN;Talisei;Kinabohutan;KIN;1.84588;125.09623
+IDN-Bangka-THA;IDN;Talisei;Tanjung Harus;THA;1.88585;125.09972
+IDN-Bangka-THW;IDN;Talisei;Tanjung Harus West;THW;1.88726;125.09468
