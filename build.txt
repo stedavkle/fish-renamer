@@ -1,0 +1,7 @@
+# Run these commands
+.venv\Scripts\activate
+# install dependencies
+pip install -r requirements.txt
+# Build x86
+pyinstaller --clean -y -F -n "Daves Fish Renamer" --distpath distx64 --icon=config/icon.png --add-data="config/icon.png;config" -w --optimize 2 --additional-hooks-dir=hooks --upx-dir=upx-5.0.0-win64 daves-fish-renamer.py
+ --collect-all=pyexiv2

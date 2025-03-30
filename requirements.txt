@@ -1,4 +1,6 @@
 tkinterdnd2
-pyexiv2
+#pyexiv2
+exifread
 pandas
 pillow
+pyinstaller
