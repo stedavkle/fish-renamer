@@ -49,6 +49,14 @@ def get_data_directory():
 class MultiColumnListbox(TkinterDnD.Tk):
     """use a ttk.TreeView as a multicolumn ListBox"""
 
+    family_default = '0-Fam'
+    genus_default = 'genus'
+    species_default = 'spec'
+    confidence = ["ok", "cf"]
+    phase = ["ad", "IP", "F", "M", "TP", "juv", "pair", "subad", "trans"]
+    colour_dict = {"typical colour": "ty", "aged": "aged", "banded": "band", "barred": "bar", "blotched": "blot", "brown": "brown", "dark": "dark", "dead": "dead", "diseased, deformed": "ill", "inds. w. different colours": "diverg", "white, pale, grey": "light", "lined": "line", "colour mutant": "mutant", "typical spot absent": "no-spot", "typical stripe absent": "no-stripe", "nocturnal": "noct", "nuptial colour": "nupt", "patterned": "pattern", "red": "red", "relaxed colour": "relax", "scarred, deformed": "scar", "speckled": "speck", "spotted": "spot", "striped": "strip", "tailspot": "tailspot", "bicolor": "two-tone", "variation": "vari", "yellow": "yell"} 
+    behaviour_dict = {"not specified": "zz", "agitated": "agit", "burried": "bur", "captured": "caught", "being cleaned": "cleaned", "cleaning client": "cleans", "colony": "col", "colour change (pic series)": "col-ch", "compeYng": "comp", "courYng": "court", "D. Act. Photoloc. suggesYve": "DAP", "exposed (e.g. out of sand)": "exp", "feeding": "feed", "fighYng": "fight", "hiding": "hide", "mouth-brooding": "mouth-b", "parenYng, family": "parent", "resYng": "rest", "schooling": "school", "spawning, oviposiYon": "spawn", "interspecific team": "team", "warning": "warn", "yawning": "yawn"}
+
     def __init__(self):
         super().__init__()
         self.tree = None
@@ -59,154 +67,162 @@ class MultiColumnListbox(TkinterDnD.Tk):
 
     def _setup_widgets(self):
         self.title("Dave's Fish Renamer")
+        self._setup_icon()
+        self._setup_dnd()
+        main_container = self
+        self._configure_main_container_grid(main_container)
+        self._create_frames(main_container)
+        self._setup_search_field()
+        self._setup_treeview_and_scrollbars()
+        self._setup_taxonomy_comboboxes()
+        self._setup_edit_frame()
+        self._setup_attribute_comboboxes()
+        self._setup_info_comboboxes()
+        self._setup_google_maps_link()
+        self._setup_status_text()
+
+    def _setup_icon(self):
         ico = Image.open(resource_path('config' + os.sep + 'icon.png'))
         photo = ImageTk.PhotoImage(ico)
         self.wm_iconphoto(False, photo)
 
+    def _setup_dnd(self):
         self.drop_target_register(DND_FILES)
         self.dnd_bind('<<Drop>>', self._dnd_files)
-        
-        main_container = self
-        self.upper_frame = ttk.Frame(main_container)
-        self.upper_frame.grid(row=0, column=0, sticky="nsew")
-        self.upper_right_frame = ttk.Frame(main_container)
-        self.upper_right_frame.grid(row=0, column=1, sticky="nsew")
-        self.middle_frame = ttk.Frame(main_container)
-        self.middle_frame.grid(row=1, column=0, sticky="nsew", columnspan=2)
-        self.bottom_frame = ttk.Frame(main_container)
-        self.bottom_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=10, columnspan=2)
 
-        self.menu = tk.Menu(self)
-        filemenu = tk.Menu(self.menu, tearoff=0)
-        filemenu.add_command(label="New", command=lambda x: x)
-        self.config(menu=self.menu)
-        
+    def _configure_main_container_grid(self, container):
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_columnconfigure(1, weight=0)
+        container.grid_rowconfigure(0, weight=1)
+
+    def _create_frames(self, main_container):
+        frames = [
+            ('upper_frame', {'row': 0, 'column': 0, 'sticky': 'nsew'}),
+            ('upper_right_frame', {'row': 0, 'column': 1, 'sticky': 'nsew'}),
+            ('middle_frame', {'row': 1, 'column': 0, 'sticky': 'nsew', 'columnspan': 2}),
+            ('bottom_frame', {'row': 2, 'column': 0, 'sticky': 'nsew', 'padx': 10, 'pady': 10, 'columnspan': 2}),
+        ]
+        for name, grid_args in frames:
+            frame = ttk.Frame(main_container)
+            frame.grid(**grid_args)
+            setattr(self, name, frame)
+        # Configure bottom frame columns
+        for col in range(3):
+            self.bottom_frame.grid_columnconfigure(col, weight=1)
+
+    def _setup_search_field(self):
         self.search_field = ttk.Entry(self.middle_frame)
         self.search_field.pack(fill='x', padx=10, pady=10)
         self.search_field.bind("<Return>", self.search)
 
-        main_container.grid_columnconfigure(0, weight=1)  # Treeview expands
-        main_container.grid_columnconfigure(1, weight=0)  # Filters stay compact
-        main_container.grid_rowconfigure(0, weight=1)
-
-        # Configure Treeview and scrollbars
+    def _setup_treeview_and_scrollbars(self):
         self.tree = ttk.Treeview(self.upper_frame, columns=list(self.fish_df.columns), show="headings")
         vsb = ttk.Scrollbar(self.upper_frame, orient="vertical", command=self.tree.yview)
         hsb = ttk.Scrollbar(self.upper_frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-
+        
         self.tree.grid(row=0, column=0, sticky="nsew")
         vsb.grid(row=0, column=1, sticky="ns")
         hsb.grid(row=1, column=0, sticky="ew")
-
+        
         self.upper_frame.grid_columnconfigure(0, weight=1)
         self.upper_frame.grid_rowconfigure(0, weight=1)
-
-        for col in range(3):
-            self.bottom_frame.grid_columnconfigure(col, weight=1)
         self.tree.bind("<ButtonRelease-1>", self._row_selected)
 
-        self.family_default = '0-Fam'
-        ttk.Label(self.bottom_frame, text="Family").grid(row=0, column=0, padx=5, pady=2, sticky='ew')
-        self.cb_family = ttk.Combobox(self.bottom_frame, values=[self.family_default] + sorted(self.fish_df['Family'].unique()), state='readonly')
-        self.cb_family.grid(row=1, column=0, padx=5, pady=2, sticky='ew')
-        self.cb_family.bind("<<ComboboxSelected>>", self.set_family)
-        self.cb_family.current(0)
-        self.cb_family.state(['disabled'])
+    def _setup_taxonomy_comboboxes(self):
+        taxonomy_combos = [
+            {
+                'label': 'Family', 'var': 'cb_family',
+                'values': [self.family_default] + sorted(self.fish_df['Family'].unique()),
+                'row': 0, 'col': 0, 'cmd': self.set_family
+            },
+            {
+                'label': 'Genus', 'var': 'cb_genus',
+                'values': [self.genus_default] + sorted(self.fish_df['Genus'].unique()),
+                'row': 0, 'col': 1, 'cmd': self.set_genus
+            },
+            {
+                'label': 'Species', 'var': 'cb_species',
+                'values': [self.species_default] + sorted(self.fish_df['Species'].unique()),
+                'row': 0, 'col': 2, 'cmd': self.set_species
+            }
+        ]
+        for combo in taxonomy_combos:
+            ttk.Label(self.bottom_frame, text=combo['label']).grid(row=combo['row'], column=combo['col'], padx=5, pady=2, sticky='ew')
+            cb = ttk.Combobox(self.bottom_frame, values=combo['values'], state='readonly')
+            cb.grid(row=combo['row']+1, column=combo['col'], padx=5, pady=2, sticky='ew')
+            cb.current(0)
+            cb.state(['disabled'])
+            cb.bind("<<ComboboxSelected>>", combo['cmd'])
+            setattr(self, combo['var'], cb)
 
-        self.genus_default = 'genus'
-        ttk.Label(self.bottom_frame, text="Genus").grid(row=0, column=1, padx=5, pady=2, sticky='ew')
-        self.cb_genus = ttk.Combobox(self.bottom_frame, values=[self.genus_default] + sorted(self.fish_df['Genus'].unique()), state='readonly')
-        self.cb_genus.grid(row=1, column=1, padx=5, pady=2, sticky='ew')
-        self.cb_genus.bind("<<ComboboxSelected>>", self.set_genus)
-        self.cb_genus.current(0)
-        self.cb_genus.state(['disabled'])
-
-        self.species_default = 'spec'
-        ttk.Label(self.bottom_frame, text="Species").grid(row=0, column=2, padx=5, pady=2, sticky='ew')
-        self.cb_species = ttk.Combobox(self.bottom_frame, values=[self.species_default] + sorted(self.fish_df['Species'].unique()), state='readonly')
-        self.cb_species.grid(row=1, column=2, padx=5, pady=2, sticky='ew')
-        self.cb_species.bind("<<ComboboxSelected>>", self.set_species)
-        self.cb_species.current(0)
-        self.cb_species.state(['disabled'])
-        
-        # create a new frame, put it in row1 col3. then put the om_mode into it
+    def _setup_edit_frame(self):
         self.edit_frame = ttk.Frame(self.bottom_frame)
         self.edit_frame.grid(row=1, column=3, sticky="nsew")
-
+        
         self.mode = tk.StringVar()
         self.om_mode = tk.OptionMenu(self.edit_frame, self.mode, "Basic", "Identify", "Edit")
         self.om_mode.grid(row=1, column=1, padx=5, pady=2, sticky='ew')
-        #self.om_mode.config(width=22)
         self.mode.set("Basic")
-        # when optionmenu is modified, call toggle
         self.mode.trace_add('write', self._toggle_extended_info)
-
+        
         self.bt_rename = tk.Button(self.edit_frame, text="Rename")
         self.bt_rename.grid(row=1, column=2, padx=5, pady=2, sticky='ew')
         self.bt_rename.grid_remove()
         self.bt_rename.bind("<Button-1>", self._edit_info)
 
+    def _setup_attribute_comboboxes(self):
+        attributes = [
+            {'label': 'Confidence', 'var': 'cb_confidence', 'values': ["ok", "cf"], 'row': 2, 'col': 0},
+            {'label': 'Phase', 'var': 'cb_phase', 'values': ["ad", "IP", "F", "M", "TP", "juv", "pair", "subad", "trans"], 'row': 2, 'col': 1},
+            {'label': 'Colour', 'var': 'cb_colour', 'values': list(self.colour_dict.keys()), 'row': 2, 'col': 2},
+            {'label': 'Behaviour', 'var': 'cb_behaviour', 'values': list(self.behaviour_dict.keys()), 'row': 2, 'col': 3}
+        ]
+        for attr in attributes:
+            tk.Label(self.bottom_frame, text=attr['label']).grid(row=attr['row'], column=attr['col'], padx=5, pady=2, sticky='ew')
+            cb = ttk.Combobox(self.bottom_frame, values=attr['values'], state='readonly')
+            cb.grid(row=attr['row']+1, column=attr['col'], padx=5, pady=2, sticky='ew')
+            cb.current(0)
+            cb.state(['disabled'])
+            setattr(self, attr['var'], cb)
 
-        confidence = ["ok", "cf"]
-        tk.Label(self.bottom_frame, text="Confidence").grid(row=2, column=0, padx=5, pady=2, sticky='ew')
-        self.cb_confidence = ttk.Combobox(self.bottom_frame, values=confidence, state='readonly')
-        self.cb_confidence.grid(row=3, column=0, padx=5, pady=2, sticky='ew')
-        self.cb_confidence.current(0)
-        self.cb_confidence.state(['disabled'])
+    def _setup_info_comboboxes(self):
+        info_combos = [
+            {
+                'label': 'Photographer', 'var': 'cb_author',
+                'values': self.users_df['Full name'].tolist(), 'row': 4, 'col': 0
+            },
+            {
+                'label': 'Site', 'var': 'cb_site',
+                'values': self.divesites_df[['Location', 'Site']].apply(lambda x: ', '.join(x), axis=1).tolist(),
+                'row': 4, 'col': 1
+            },
+            {
+                'label': 'Activity', 'var': 'cb_activity',
+                'values': self.activities_df['activity'].tolist(), 'row': 4, 'col': 2
+            }
+        ]
+        for combo in info_combos:
+            ttk.Label(self.bottom_frame, text=combo['label']).grid(row=combo['row'], column=combo['col'], padx=5, pady=2, sticky='ew')
+            cb = ttk.Combobox(self.bottom_frame, values=combo['values'], state='readonly')
+            cb.grid(row=combo['row']+1, column=combo['col'], padx=5, pady=2, sticky='ew')
+            cb.bind("<<ComboboxSelected>>", self._save_personal_config)
+            setattr(self, combo['var'], cb)
 
-        phase = ["ad", "IP", "F", "M", "TP", "juv", "pair", "subad", "trans"]
-        tk.Label(self.bottom_frame, text="Phase").grid(row=2, column=1, padx=5, pady=2, sticky='ew')
-        self.cb_phase = ttk.Combobox(self.bottom_frame, values=phase, state='readonly')
-        self.cb_phase.grid(row=3, column=1, padx=5, pady=2, sticky='ew')
-        self.cb_phase.current(0)
-        self.cb_phase.state(['disabled'])
-
-        self.colour_dict = {"typical colour": "ty", "aged": "aged", "banded": "band", "barred": "bar", "blotched": "blot", "brown": "brown", "dark": "dark", "dead": "dead", "diseased, deformed": "ill", "inds. w. different colours": "diverg", "white, pale, grey": "light", "lined": "line", "colour mutant": "mutant", "typical spot absent": "no-spot", "typical stripe absent": "no-stripe", "nocturnal": "noct", "nuptial colour": "nupt", "patterned": "pattern", "red": "red", "relaxed colour": "relax", "scarred, deformed": "scar", "speckled": "speck", "spotted": "spot", "striped": "strip", "tailspot": "tailspot", "bicolor": "two-tone", "variation": "vari", "yellow": "yell"}   
-        tk.Label(self.bottom_frame, text="Colour").grid(row=2, column=2, padx=5, pady=2, sticky='ew')
-        self.cb_colour = ttk.Combobox(self.bottom_frame, values=list(self.colour_dict.keys()), state='readonly')
-        self.cb_colour.grid(row=3, column=2, padx=5, pady=2, sticky='ew')
-        self.cb_colour.current(0)
-        self.cb_colour.state(['disabled'])
-
-        self.behaviour_dict = {"not specified": "zz", "agitated": "agit", "burried": "bur", "captured": "caught", "being cleaned": "cleaned", "cleaning client": "cleans", "colony": "col", "colour change (pic series)": "col-ch", "compeYng": "comp", "courYng": "court", "D. Act. Photoloc. suggesYve": "DAP", "exposed (e.g. out of sand)": "exp", "feeding": "feed", "fighYng": "fight", "hiding": "hide", "mouth-brooding": "mouth-b", "parenYng, family": "parent", "resYng": "rest", "schooling": "school", "spawning, oviposiYon": "spawn", "interspecific team": "team", "warning": "warn", "yawning": "yawn"}    
-        
-        tk.Label(self.bottom_frame, text="Behaviour").grid(row=2, column=3, padx=5, pady=2, sticky='ew')
-        # set the default to the first behaviour[0]
-        self.cb_behaviour = ttk.Combobox(self.bottom_frame, values=list(self.behaviour_dict.keys()), state='readonly')
-        self.cb_behaviour.grid(row=3, column=3, padx=5, pady=2, sticky='ew')
-        self.cb_behaviour.current(0)
-        self.cb_behaviour.state(['disabled'])    
-
-        ttk.Label(self.bottom_frame, text="Photographer").grid(row=4, column=0, padx=5, pady=2, sticky='ew')
-        self.cb_author = ttk.Combobox(self.bottom_frame, values=self.users_df['Full name'].values.tolist(), state='readonly')
-        self.cb_author.grid(row=5, column=0, padx=5, pady=2, sticky='ew')
-        self.cb_author.bind("<<ComboboxSelected>>", self._save_personal_config)
-        ttk.Label(self.bottom_frame, text="Site").grid(row=4, column=1, padx=5, pady=2, sticky='ew')
-        # seperate location and site by a comma
-        self.cb_site = ttk.Combobox(self.bottom_frame, values=self.divesites_df[['Location', 'Site']].apply(lambda x: ', '.join(x), axis=1).values.tolist(), state='readonly')
-        self.cb_site.grid(row=5, column=1, padx=5, pady=2, sticky='ew')
-        self.cb_site.bind("<<ComboboxSelected>>", self._save_personal_config)
-        
-        # create a clickable link to google maps
+    def _setup_google_maps_link(self):
         self.link = tk.Label(self.bottom_frame, text="Google Maps", fg="blue", cursor="hand2")
         self.link.grid(row=6, column=1, padx=5, pady=2, sticky='ew')
+        self.link.bind("<Button-1>", self._open_googlemaps)
 
-        def __open_googlemaps(event):
-            location, site = self.cb_site.get().split(", ")
-            latitude, longitude = self.divesites_df[(self.divesites_df['Location'] == location) & (self.divesites_df['Site'] == site)][['latitude', 'longitude']].values[0]
-            os.system(f"start https://maps.google.com/?q={latitude},{longitude}")
+    def _open_googlemaps(self, event):
+        location, site = self.cb_site.get().split(", ")
+        coordinates = self.divesites_df[
+            (self.divesites_df['Location'] == location) & 
+            (self.divesites_df['Site'] == site)
+        ][['latitude', 'longitude']].values[0]
+        os.system(f"start https://maps.google.com/?q={coordinates[0]},{coordinates[1]}")
 
-        self.link.bind("<Button-1>", __open_googlemaps)
-        # https://maps.google.com/?q=<lat>,<lng>
-        
-        tk.Label(self.bottom_frame, text="Activity").grid(row=4, column=2, padx=5, pady=2, sticky='ew')
-        self.cb_activity = ttk.Combobox(self.bottom_frame, values=self.activities_df['activity'].values.tolist(), state='readonly')
-        self.cb_activity.grid(row=5, column=2, padx=5, pady=2, sticky='ew')
-        #self.cb_activity.current(0)
-        self.cb_activity.bind("<<ComboboxSelected>>", self._save_personal_config)
-
-        # create a textblock that is used for displaying status messages
+    def _setup_status_text(self):
         self.status = tk.Text(self.bottom_frame, height=3, width=1, font=("Arial", 8))
         self.status.grid(row=4, column=3, padx=5, pady=2, sticky='ew', rowspan=3)
         self.status.insert(tk.END, "Ready")
