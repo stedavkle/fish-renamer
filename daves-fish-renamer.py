@@ -2,7 +2,9 @@
 Here the TreeView widget is configured as a multi-column listbox
 with adjustable column width and column-header-click sorting.
 '''
+import configparser
 import tkinter as tk
+from tkinter import filedialog
 import tkinter.font as tkFont
 import tkinter.ttk as ttk
 from tkinterdnd2 import DND_FILES, TkinterDnD
@@ -17,38 +19,37 @@ import exifread
 import sys, os
 
 from pathlib import Path
+import shutil
 
-
-def resource_path(relative_path):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath('.'), relative_path)
-
-def get_data_directory():
-    """Determine the correct data directory based on execution context"""
+def get_app_path():
+    """Get the appropriate path based on whether we're running in a bundle or not"""
     if getattr(sys, 'frozen', False):
-        # Running in a bundle (PyInstaller)
-        base_dir = Path(sys._MEIPASS)
-    else:
-        # Running in development
-        base_dir = Path(__file__).parent.parent
-    
-    # Check common data directory locations
-    possible_locations = [
-        base_dir / 'config',
-        Path.home() / '.daves-fish-renamer' / 'config',
-        Path(os.getenv('APPDATA', '')) / 'Daves Fish Renamer' / 'config' if os.name == 'nt' else None
-    ]
-    
-    for location in possible_locations:
-        if location and location.exists():
-            return location
-            
-    return base_dir  # Fallback
+        # Running in PyInstaller bundle
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent
 
-class MultiColumnListbox(TkinterDnD.Tk):
+def get_data_path():
+    """Get the writable data directory (different per OS)"""
+    if sys.platform == 'win32':
+        return Path(os.getenv('APPDATA')) / 'DavesFishRenamer'
+    elif sys.platform == 'darwin':
+        return Path.home() / 'Library' / 'Application Support' / 'DaveFishRenamer'
+    else:  # Linux/other
+        return Path.home() / '.DavesFishRenamer'
+    
+def initialize_data_files():
+    """Copy bundled files to writable location on first run"""
+    data_dir = get_data_path()
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    for file in os.listdir(get_app_path() / 'config'):
+        if not (data_dir / file).exists():
+            shutil.copy(get_app_path() / 'config' / file, data_dir / file)
+
+class FishRenamer(TkinterDnD.Tk):
     """use a ttk.TreeView as a multicolumn ListBox"""
 
+    tree_columns = ['Family', 'Genus', 'Species', 'Popular name']
     family_default = '0-Fam'
     genus_default = 'genus'
     species_default = 'spec'
@@ -60,10 +61,30 @@ class MultiColumnListbox(TkinterDnD.Tk):
     def __init__(self):
         super().__init__()
         self.tree = None
-        self._load_data()
         self._setup_widgets()
         self._build_tree()
+        initialize_data_files()
+
+        self.fish_csv_path = tk.StringVar()
+        self.users_csv_path = tk.StringVar()
+        self.divesites_csv_path = tk.StringVar()
+        self.activities_csv_path = tk.StringVar()
+
         self._load_personal_config()
+        #self._load_preferences()
+        self._load_data()
+        
+        # Set defaults if no preferences loaded
+        data_dir = get_data_path()
+        
+        if not self.fish_csv_path.get():
+            self.fish_csv_path.set(str(data_dir / "Species.csv"))
+        if not self.users_csv_path.get():
+            self.users_csv_path.set(str(data_dir / "Photographers.csv"))
+        if not self.divesites_csv_path.get():
+            self.divesites_csv_path.set(str(data_dir / "Divesites.csv"))
+        if not self.activities_csv_path.get():
+            self.activities_csv_path.set(str(data_dir / "Activities.csv"))
 
     def _setup_widgets(self):
         self.title("Dave's Fish Renamer")
@@ -72,6 +93,7 @@ class MultiColumnListbox(TkinterDnD.Tk):
         main_container = self
         self._configure_main_container_grid(main_container)
         self._create_frames(main_container)
+        self._setup_menu()
         self._setup_search_field()
         self._setup_treeview_and_scrollbars()
         self._setup_taxonomy_comboboxes()
@@ -81,8 +103,75 @@ class MultiColumnListbox(TkinterDnD.Tk):
         self._setup_google_maps_link()
         self._setup_status_text()
 
+    def _setup_menu(self):
+        # Create main menu bar
+        menubar = tk.Menu(self)
+        self.config(menu=menubar)
+        
+        # Create Preferences menu
+        config_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Settings", menu=config_menu)
+        config_menu.add_command(label="Preferences", command=self._show_preferences)
+
+    def _show_preferences(self):
+        # Create preferences window
+        prefs_window = tk.Toplevel(self)
+        prefs_window.attributes('-topmost', 'true')
+        prefs_window.drop_target_register(DND_FILES)
+        prefs_window.dnd_bind('<<Drop>>', self._update_csv_files)
+
+        prefs_window.title("Preferences")
+        prefs_window.geometry("500x300")
+        
+        # Create frame for path settings
+        path_frame = ttk.LabelFrame(prefs_window, text="Drag&Drop updated CSV files here")
+        path_frame.grid(row=0, column=0, padx=10, pady=10, sticky='ew')
+
+        files = [
+            ("Species CSV", 'update_species'),
+            ("Photographers CSV", 'update_users'),
+            ("Divesites CSV", 'update_divesites'),
+            ("Activities CSV", 'update_activities')
+        ]
+        for row, (label_text, var) in enumerate(files):
+            ttk.Label(path_frame, text=label_text).grid(row=row, column=0, padx=5, pady=5, sticky='e')
+            entry = ttk.Label(path_frame, width=40)
+            entry.grid(row=row, column=1, padx=5, pady=5, sticky='ew')
+            #ttk.Button(path_frame, text="Browse...", 
+            #       command=lambda var=path_var: self._browse_csv(var)).grid(row=row, column=2, padx=5)
+            setattr(self, var, entry)
+
+        # create a button to try update over the web
+        update_button = tk.Button(prefs_window, text="Update from web", command=self._update_from_web).grid(row=1, column=0, padx=10, pady=10, sticky='ew')
+
+    def _update_from_web(self):
+        pass
+
+    def _update_csv_files(self, event):
+        files = self.splitlist(event.data)
+        for file in files:
+            if 'Species' in file:
+                shutil.copy(file, get_data_path() / "Species.csv")
+                self.update_species.config(text="Species CSV updated")
+            elif 'Photographers' in file:
+                shutil.copy(file, get_data_path() / "Photographers.csv")
+                self.update_users.config(text="Photographers CSV updated")
+            elif 'Divesites' in file:
+                shutil.copy(file, get_data_path() / "Divesites.csv")
+                self.update_divesites.config(text="Divesites CSV updated")
+            elif 'Activities' in file:
+                shutil.copy(file, get_data_path() / "Activities.csv")
+                self.update_activities.config(text="Activities CSV updated")
+        self._load_data()
+
+    def _browse_csv(self, path_var):
+        # Add actual file browsing logic here
+        filepath = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+        if filepath:
+            path_var.set(filepath)
+
     def _setup_icon(self):
-        ico = Image.open(resource_path('config' + os.sep + 'icon.png'))
+        ico = Image.open(Path(get_app_path(), 'config', 'icon.png'))
         photo = ImageTk.PhotoImage(ico)
         self.wm_iconphoto(False, photo)
 
@@ -116,7 +205,7 @@ class MultiColumnListbox(TkinterDnD.Tk):
         self.search_field.bind("<Return>", self.search)
 
     def _setup_treeview_and_scrollbars(self):
-        self.tree = ttk.Treeview(self.upper_frame, columns=list(self.fish_df.columns), show="headings")
+        self.tree = ttk.Treeview(self.upper_frame, columns=self.tree_columns, show="headings")
         vsb = ttk.Scrollbar(self.upper_frame, orient="vertical", command=self.tree.yview)
         hsb = ttk.Scrollbar(self.upper_frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
@@ -133,17 +222,17 @@ class MultiColumnListbox(TkinterDnD.Tk):
         taxonomy_combos = [
             {
                 'label': 'Family', 'var': 'cb_family',
-                'values': [self.family_default] + sorted(self.fish_df['Family'].unique()),
+                'values': [self.family_default] ,#+ sorted(self.fish_df['Family'].unique()),
                 'row': 0, 'col': 0, 'cmd': self.set_family
             },
             {
                 'label': 'Genus', 'var': 'cb_genus',
-                'values': [self.genus_default] + sorted(self.fish_df['Genus'].unique()),
+                'values': [self.genus_default],# + sorted(self.fish_df['Genus'].unique()),
                 'row': 0, 'col': 1, 'cmd': self.set_genus
             },
             {
                 'label': 'Species', 'var': 'cb_species',
-                'values': [self.species_default] + sorted(self.fish_df['Species'].unique()),
+                'values': [self.species_default],# + sorted(self.fish_df['Species'].unique()),
                 'row': 0, 'col': 2, 'cmd': self.set_species
             }
         ]
@@ -190,16 +279,19 @@ class MultiColumnListbox(TkinterDnD.Tk):
         info_combos = [
             {
                 'label': 'Photographer', 'var': 'cb_author',
-                'values': self.users_df['Full name'].tolist(), 'row': 4, 'col': 0
+                #'values': self.users_df['Full name'].tolist(), 'row': 4, 'col': 0
+                'values': ['Anonymous'], 'row': 4, 'col': 0
             },
             {
                 'label': 'Site', 'var': 'cb_site',
-                'values': self.divesites_df[['Location', 'Site']].apply(lambda x: ', '.join(x), axis=1).tolist(),
+                #'values': self.divesites_df[['Location', 'Site']].apply(lambda x: ', '.join(x), axis=1).tolist(),
+                'values': ['Nowhere'],
                 'row': 4, 'col': 1
             },
             {
                 'label': 'Activity', 'var': 'cb_activity',
-                'values': self.activities_df['activity'].tolist(), 'row': 4, 'col': 2
+                #'values': self.activities_df['activity'].tolist(), 'row': 4, 'col': 2
+                'values': ['Nothing'], 'row': 4, 'col': 2
             }
         ]
         for combo in info_combos:
@@ -236,23 +328,100 @@ class MultiColumnListbox(TkinterDnD.Tk):
         self.cb_colour.set("typical colour")
         self.cb_behaviour.set("not specified")
 
-    def _save_personal_config(self, event):
-        with open("config/conf.conf", "w") as f:
-            f.write(f"{self.cb_author.get()}\n")
-            f.write(f"{self.cb_site.get()}\n")
-            f.write(f"{self.cb_activity.get()}\n")
+    def _save_personal_config(self, event=None):
+        """Save user preferences to INI file"""
+        config = configparser.ConfigParser()
+        config_path = get_data_path() / "config.ini"
+        
+        # Preserve existing config if it exists
+        if config_path.exists():
+            config.read(config_path)
+        
+        if not config.has_section('USER_PREFS'):
+            config.add_section('USER_PREFS')
+            
+        config.set('USER_PREFS', 'author', self.cb_author.get())
+        config.set('USER_PREFS', 'site', self.cb_site.get())
+        config.set('USER_PREFS', 'activity', self.cb_activity.get())
+        
+        try:
+            with open(config_path, 'w') as configfile:
+                config.write(configfile)
+        except Exception as e:
+            self.status.insert(tk.END, f"\nError saving preferences: {str(e)}")
 
     def _load_personal_config(self):
-        if os.path.exists("config/conf.conf"):
-            with open("config/conf.conf", "r") as f:
-                self.cb_author.set(f.readline().strip())
-                self.cb_site.set(f.readline().strip())
-                self.cb_activity.set(f.readline().strip())
-        else:
-            self
+        """Load user preferences from INI file"""
+        config_path = get_data_path() / "config.ini"
+        
+        if not config_path.exists():
+            # Set default empty values
+            self.cb_author.set('')
+            self.cb_site.set('')
+            self.cb_activity.set('')
+            return
+
+        config = configparser.ConfigParser()
+        config.read(config_path)
+        
+        # Get values with fallback to empty string
+        self.cb_author.set(config.get('USER_PREFS', 'author', fallback=''))
+        self.cb_site.set(config.get('USER_PREFS', 'site', fallback=''))
+        self.cb_activity.set(config.get('USER_PREFS', 'activity', fallback=''))
+
+
+    # def _save_preferences(self):
+    #     """Save paths to config file in appropriate directory"""
+    #     config = configparser.ConfigParser()
+    #     config_path = get_data_path() / "config.ini"
+        
+    #     # Preserve existing config if it exists
+    #     if config_path.exists():
+    #         config.read(config_path)
+        
+    #     if not config.has_section('PATHS'):
+    #         config.add_section('PATHS')
+
+    #     config['PATHS'] = {
+    #         'Species': self.fish_csv_path.get(),
+    #         'Photographers': self.users_csv_path.get(),
+    #         'Divesites': self.divesites_csv_path.get(),
+    #         'Activities': self.activities_csv_path.get()
+    #     }
+
+    #     config_dir = get_data_path()
+    #     config_path = config_dir / "config.ini"
+        
+    #     try:
+    #         config_dir.mkdir(parents=True, exist_ok=True)
+
+    #         with open(config_path, 'w') as configfile:
+    #             config.write(configfile)
+    #         self.status.insert(tk.END, f"\nPreferences saved successfully to {config_path}")
+    #     except Exception as e:
+    #         self.status.insert(tk.END, f"\nError saving preferences: {str(e)}")
+
+    # def _load_preferences(self):
+    #     """Load paths from config file if exists"""
+    #     config_path = get_data_path() / "config.ini"
+        
+    #     if not config_path.exists():
+    #         return
+
+    #     config = configparser.ConfigParser()
+    #     try:
+    #         config.read(config_path)
+    #         self.fish_csv_path.set(config['PATHS'].get('Species', ''))
+    #         self.users_csv_path.set(config['PATHS'].get('Photographers', ''))
+    #         self.divesites_csv_path.set(config['PATHS'].get('Divesites', ''))
+    #         self.activities_csv_path.set(config['PATHS'].get('Activities', ''))
+    #     except Exception as e:
+    #         self.status.insert(tk.END, f"\nError loading preferences: {str(e)}")
+
 
     def open_popup(self, content):
         top = tk.Toplevel(self)
+
         top.geometry("250x100")
         top.title("Alert")
         tk.Label(top, text=content).pack()
@@ -324,7 +493,6 @@ class MultiColumnListbox(TkinterDnD.Tk):
 
     def regex_match_datetime_filename(self, filename):
         return re.match(r'0?\-?[A-Za-z]*_[A-Za-z]+_[a-z]+_[A-Z]_[a-z]{2}_[A-Za-z]+_[A-Za-z\-]+_[A-Za-z\-]+_[A-Za-z]{5}_[A-Z]{3}-[A-Za-z]+-[A-Z0-9]{3}_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_[A-Za-z]+_([A-Za-z0-9]+)', filename)
-
 
     def _assemble_filename_name_site_datetime_activity(self, path):
         filepath, extension = os.path.splitext(path)
@@ -483,13 +651,13 @@ class MultiColumnListbox(TkinterDnD.Tk):
                 self._notice(f"All files were renamed successfully.")
                 #self.open_popup(f"{not_renamed} files were not renamed.\nThey might have been renamed already.")
 
-
     def _row_selected(self, event):
-        item = self.tree.selection()[0]
-        family, genus, species, common_name = self.tree.item(item, 'values')
-        self.cb_family.set(family)
-        self.cb_genus.set(genus)
-        self.cb_species.set(species)
+        if self.tree.selection():
+            item = self.tree.selection()[0]
+            family, genus, species, common_name = self.tree.item(item, 'values')
+            self.cb_family.set(family)
+            self.cb_genus.set(genus)
+            self.cb_species.set(species)
         # self._set_preview()
 
     def _toggle_extended_info(self, a, b, c):
@@ -558,27 +726,51 @@ class MultiColumnListbox(TkinterDnD.Tk):
         return df.sort_values(by=['Family', 'Genus', 'Species'])
 
     def _load_data(self):
-        self.fish_df = pd.read_csv("config" + os.sep + "Species.csv", sep=';')
-        # replace nan with ''
-        self.fish_df = self.fish_df.fillna('')
-           # print("config/Species.csv loaded")
-        self.users_df = pd.read_csv("config" + os.sep + "Photographers.csv", sep=';')
-            #print("config/Photographers.csv loaded")
-        self.divesites_df = pd.read_csv("config" + os.sep + "Divesites.csv", sep=';')
-            #print("config/Divesites.csv loaded")
-        self.activities_df = pd.read_csv("config" + os.sep + "Activities.csv", sep=';')
-            #print("config/Activities.csv loaded")
+        """Load data files using paths from configuration"""
+        try:
+            # Load fish data
+            self.fish_df = pd.read_csv(get_data_path() / 'Species.csv', sep=';').fillna('')
+            #self.status.insert(tk.END, "\nLoaded species data from: " + self.fish_csv_path.get())
+            # Load photographers
+            self.users_df = pd.read_csv(get_data_path() / 'Photographers.csv', sep=';')
+            #self.status.insert(tk.END, "\nLoaded photographers from: " + self.users_csv_path.get())
+            # Load divesites
+            self.divesites_df = pd.read_csv(get_data_path() / 'Divesites.csv', sep=';')
+            #self.status.insert(tk.END, "\nLoaded divesites from: " + self.divesites_csv_path.get())
+            # Load activities
+            self.activities_df = pd.read_csv(get_data_path() / 'Activities.csv', sep=';')
+            #self.status.insert(tk.END, "\nLoaded activities from: " + self.activities_csv_path.get())
+    
+        except FileNotFoundError as e:
+            self.status.insert(tk.END, f"\nError: Missing data file - {str(e)}")
+        except pd.errors.EmptyDataError:
+            self.status.insert(tk.END, "\nError: One or more data files are empty/corrupt")
+        except Exception as e:
+            self.status.insert(tk.END, f"\nUnexpected error loading data: {str(e)}")
+        finally:
+            # Ensure fish_df has NaN replaced even if other files fail
+            if hasattr(self, 'fish_df'):
+                self.fish_df = self.fish_df.fillna('')
+                self.clear_tree()
+                self.fill_tree(self.sort_fish_df(self.fish_df).values.tolist())
+            else:
+                self.status.insert(tk.END, "\nCritical error: Failed to load species data!")
 
+            if hasattr(self, 'users_df'):
+                self.cb_author['values'] = self.users_df['Full name'].tolist()
+            if hasattr(self, 'divesites_df'):
+                self.cb_site['values'] = self.divesites_df[['Location', 'Site']].sort_values(by=['Location', 'Site'], inplace=False).apply(lambda x: ', '.join(x), axis=1).tolist()
+            if hasattr(self, 'activities_df'):
+                self.cb_activity['values'] = self.activities_df['activity'].tolist()
 
     def _build_tree(self):
-        for col in list(self.fish_df.columns):
+        for col in list(self.tree_columns):
             self.tree.heading(col, text=col.title(),
                 command=lambda c=col: self.sortby(self.tree, c, 0))
             # adjust the column's width to the header string
             self.tree.column(col,
                 width=tkFont.Font().measure(col.title()))
-
-        self.fill_tree(self.sort_fish_df(self.fish_df).values.tolist())
+        #self.fill_tree(self.sort_fish_df(self.fish_df).values.tolist())
 
     def fill_tree(self, items):
         for item in items:
@@ -600,23 +792,19 @@ class MultiColumnListbox(TkinterDnD.Tk):
         search_substrings = search_string.split()
         # get the data from the dataframe
         fish_filtered = self.fish_df[self.fish_df.apply(lambda row: all([any([substring.lower() in value.lower() for value in row.values]) for substring in search_substrings]), axis=1)]
-        #print(fish_filtered)
         # insert the data into the tree
         self.fill_tree(self.sort_fish_df(fish_filtered).values.tolist())
 
-    def sortby(tree, col, descending):
+    def sortby(self, tree, col, descending):
         """sort tree contents when a column header is clicked on"""
         data = [(tree.set(child, col), child) \
             for child in tree.get_children('')]
         data.sort(reverse=descending)
         for ix, item in enumerate(data):
             tree.move(item[1], '', ix)
-        tree.heading(col, command=lambda col=col: sortby(tree, col, \
+        tree.heading(col, command=lambda col=col: self.sortby(tree, col, \
             int(not descending)))
 
-
 if __name__ == '__main__':
-    # root = tk.Tk()
-    # root.title("Multicolumn Treeview/Listbox")
-    listbox = MultiColumnListbox()
-    listbox.mainloop()
+    main = FishRenamer()
+    main.mainloop()

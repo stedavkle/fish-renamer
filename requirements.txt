@@ -4,3 +4,5 @@ exifread
 pandas
 pillow
 pyinstaller
+nuitka
+imageio
