@@ -751,6 +751,9 @@ class FishRenamer(TkinterDnD.Tk):
             # Ensure fish_df has NaN replaced even if other files fail
             if hasattr(self, 'fish_df'):
                 self.fish_df = self.fish_df.fillna('')
+                self.cb_family['values'] =  [self.family_default] + sorted(self.fish_df['Family'].unique())
+                self.cb_genus['values'] = [self.genus_default] + sorted(self.fish_df['Genus'].unique())
+                self.cb_species['values'] = [self.species_default] + sorted(self.fish_df['Species'].unique())
                 self.clear_tree()
                 self.fill_tree(self.sort_fish_df(self.fish_df).values.tolist())
             else:
