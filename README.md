@@ -89,7 +89,7 @@ python daves-fish-renamer.py
 ```
 
 ### 🏗️ Build Executables
-Build for x86/x64 (download upx first)
+Build for x86/x64 (download [upx](https://upx.github.io/))
 ```bash
 python -m nuitka --standalone --onefile --output-dir=distx64nuitka --windows-icon-from-ico=config/icon.png --include-data-dir="config=config" --windows-console-mode=disable --plugin-enable=upx --upx-binary="upx-5.0.0-win64/upx.exe" --enable-plugin=tk-inter daves-fish-renamer.py
 pyinstaller --clean -y -F -n "Daves Fish Renamer" --distpath distx64 --icon=config/icon.png --add-data="config/icon.png;config" -w --optimize 2 --additional-hooks-dir=hooks --upx-dir=upx-5.0.0-win64 daves-fish-renamer.py
