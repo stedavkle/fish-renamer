@@ -1,0 +1,122 @@
+name: Build Applications
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install nuitka
+      
+      - name: Download UPX
+        run: |
+          $url = "https://github.com/upx/upx/releases/download/v5.0.0/upx-5.0.0-win64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:LOCALAPPDATA\upx-5.0.0-win64.zip"
+          Expand-Archive -Path "$env:LOCALAPPDATA\upx-5.0.0-win64.zip" -DestinationPath "$env:LOCALAPPDATA\upx-5.0.0-win64"
+      - name: Check UPX Exists
+        run: Test-Path -Path "$env:LOCALAPPDATA\upx-5.0.0-win64\upx-5.0.0-win64\upx.exe"
+          
+      - name: Install Dependency Walker
+        run: |
+          # Create directory structure Nuitka expects
+          $dependsDir = "$env:LOCALAPPDATA\Nuitka\Nuitka\Cache\downloads\depends\x86_64"
+          New-Item -ItemType Directory -Path $dependsDir -Force
+          
+          # Download and extract Dependency Walker
+          $dependsUrl = "https://dependencywalker.com/depends22_x64.zip"
+          Invoke-WebRequest -Uri $dependsUrl -OutFile depends.zip
+          Expand-Archive -Path depends.zip -DestinationPath depends_temp
+          
+          # Copy ALL files from extracted directory
+          Copy-Item -Path "depends_temp\*" -Destination $dependsDir -Recurse -Force
+          
+          # Clean up temporary files
+          Remove-Item -Path depends.zip, depends_temp -Recurse -Force
+      
+      - name: Build with Nuitka
+        run: |
+          python -m nuitka --standalone --onefile --output-dir=distx64nuitka --windows-icon-from-ico=config/icon.png --include-data-dir="config=config" --windows-console-mode=disable --plugin-enable=upx --upx-binary="$env:LOCALAPPDATA\upx-5.0.0-win64\upx-5.0.0-win64\upx.exe" --enable-plugin=tk-inter --disable-ccache daves-fish-renamer.py
+      
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-executable
+          path: distx64nuitka/daves-fish-renamer.exe
+          compression-level: 0
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install nuitka
+      
+      - name: Install ccache
+        run: |
+          brew install ccache
+      
+      - name: Build with Nuitka
+        run: |
+          python -m nuitka --standalone --onefile --output-dir=distmipsnuitka --macos-create-app-bundle --macos-app-icon=config/icon.png --include-data-dir="config=config" --enable-plugin=tk-inter --disable-ccache daves-fish-renamer.py
+      
+      - name: Zip macOS app
+        run: |
+          cd distmipsnuitka
+          tar -czf daves-fish-renamer.app.tar.gz daves-fish-renamer.app
+          cd ..
+      
+      - name: Upload macOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-executable
+          path: distmipsnuitka/daves-fish-renamer.app.tar.gz
+
+  create-release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: .
+        
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            macos-executable/*
+            windows-executable/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
