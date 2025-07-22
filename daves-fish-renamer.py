@@ -12,6 +12,8 @@ import pandas as pd
 from PIL import Image, ImageTk
 import re
 import numpy as np
+import requests
+import time
 
 # TODO using exifread instead of pyexiv2 because pyexiv2 does not work with pyinstaller
 import exifread
@@ -46,10 +48,24 @@ def initialize_data_files():
         if not (data_dir / file).exists():
             shutil.copy(get_app_path() / 'config' / file, data_dir / file)
 
+access_token = '2vf3nQ3LO9MyHEFuHFdF'
+pid = 'b1443699372.553636'
+list_dir_url = f'https://my.hidrive.com/api/dir?pid={pid}&access_token={access_token}'
+def get_filelist():
+    response = requests.get(list_dir_url)
+    if response.status_code == 200:
+        return response.json().get('members', [])
+    else:
+        print(f"Error fetching file list: {response.status_code}")
+        return []
+def get_download_url(filename):
+    return f'https://my.hidrive.com/api/file?pid={pid}&path={filename}&access_token={access_token}'
+
+
 class FishRenamer(TkinterDnD.Tk):
     """use a ttk.TreeView as a multicolumn ListBox"""
 
-    tree_columns = ['Family', 'Genus', 'Species', 'Popular name']
+    tree_columns = ['Family', 'Genus', 'Species', 'Species English']
     family_default = '0-Fam'
     genus_default = 'genus'
     species_default = 'spec'
@@ -60,6 +76,7 @@ class FishRenamer(TkinterDnD.Tk):
 
     def __init__(self):
         super().__init__()
+        self.data_dir = get_data_path()
         self.tree = None
         self._setup_widgets()
         self._build_tree()
@@ -72,19 +89,11 @@ class FishRenamer(TkinterDnD.Tk):
 
         self._load_personal_config()
         #self._load_preferences()
+
         self._load_data()
         
         # Set defaults if no preferences loaded
-        data_dir = get_data_path()
         
-        if not self.fish_csv_path.get():
-            self.fish_csv_path.set(str(data_dir / "Species.csv"))
-        if not self.users_csv_path.get():
-            self.users_csv_path.set(str(data_dir / "Photographers.csv"))
-        if not self.divesites_csv_path.get():
-            self.divesites_csv_path.set(str(data_dir / "Divesites.csv"))
-        if not self.activities_csv_path.get():
-            self.activities_csv_path.set(str(data_dir / "Activities.csv"))
 
     def _setup_widgets(self):
         self.title("Dave's Fish Renamer")
@@ -115,16 +124,16 @@ class FishRenamer(TkinterDnD.Tk):
 
     def _show_preferences(self):
         # Create preferences window
-        prefs_window = tk.Toplevel(self)
-        prefs_window.attributes('-topmost', 'true')
-        prefs_window.drop_target_register(DND_FILES)
-        prefs_window.dnd_bind('<<Drop>>', self._update_csv_files)
+        self.prefs_window = tk.Toplevel(self)
+        self.prefs_window.attributes('-topmost', 'true')
+        self.prefs_window.drop_target_register(DND_FILES)
+        self.prefs_window.dnd_bind('<<Drop>>', self._update_csv_files_dnd)
 
-        prefs_window.title("Preferences")
-        prefs_window.geometry("500x300")
+        self.prefs_window.title("Preferences")
+        self.prefs_window.geometry("500x300")
         
         # Create frame for path settings
-        path_frame = ttk.LabelFrame(prefs_window, text="Drag&Drop updated CSV files here")
+        path_frame = ttk.LabelFrame(self.prefs_window, text="Drag&Drop updated CSV files here")
         path_frame.grid(row=0, column=0, padx=10, pady=10, sticky='ew')
 
         files = [
@@ -135,32 +144,181 @@ class FishRenamer(TkinterDnD.Tk):
         ]
         for row, (label_text, var) in enumerate(files):
             ttk.Label(path_frame, text=label_text).grid(row=row, column=0, padx=5, pady=5, sticky='e')
-            entry = ttk.Label(path_frame, width=40)
+            entry = ttk.Label(path_frame, width=20)
             entry.grid(row=row, column=1, padx=5, pady=5, sticky='ew')
             #ttk.Button(path_frame, text="Browse...", 
             #       command=lambda var=path_var: self._browse_csv(var)).grid(row=row, column=2, padx=5)
             setattr(self, var, entry)
 
         # create a button to try update over the web
-        update_button = tk.Button(prefs_window, text="Update from web", command=self._update_from_web).grid(row=1, column=0, padx=10, pady=10, sticky='ew')
+        update_button = tk.Button(self.prefs_window, text="Fetch update", command=self._update_from_web).grid(row=1, column=0, padx=10, pady=10, sticky='ew')
+        # add a label to show the status of the update
+        self.update_status = ttk.Label(self.prefs_window, text="Status: Not updated")
+        self.update_status.grid(row=1, column=1, padx=30, pady=10, sticky='ew')
+        
 
     def _update_from_web(self):
-        pass
+        # create a dropdown menu for location
+        try:
+            response = requests.get(list_dir_url)
+            if response.status_code == 200:
+                filelist = [member.get('name') for member in response.json().get('members', [])]
+                self.update_status.config(text="Files fetched successfully")
+            else:
+                self.update_status.config(text=f"Error {response.status_code}")
+                return
+        except requests.RequestException as e:
+            self.update_status.config(text=f"Error: {str(e)}")
+            return
 
-    def _update_csv_files(self, event):
+        # Divesites_Bangka%202025-07-22.csv
+        locations = set()
+        for file in filelist:
+            # get the date
+            #match = re.search(r'(?:\b(?:Divesites|Species))_([A-Za-z]*)%20(\d{4}-\d{2}-\d{2})', file.get('name', ''))
+            filename = file
+            if file.startswith('Divesites_') or file.startswith('Species_'):
+                match = re.search(r'[A-Za-z\s]+_([A-Za-z\s]+)%20[0-9-]+', file)
+                if match:
+                    location = match.group(1)
+                    locations.add(location)
+        
+        # create a dropdown menu for location
+        self.location_var = tk.StringVar()
+        self.location_var.set("Select location")
+        location_menu = ttk.OptionMenu(self.prefs_window, self.location_var, "Select location", *sorted(locations))
+        location_menu.grid(row=2, column=0, padx=10, pady=10, sticky='ew')
+
+        download_button = tk.Button(self.prefs_window, text="Update files", command=lambda: self._update_csv_files_web(filelist))
+        download_button.grid(row=2, column=1, padx=10, pady=10, sticky='ew')
+
+    def _download_file(self, url, filepath):
+        """Downloads a file from a URL and saves it to a filepath."""
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()  # Raises an HTTPError for bad responses (4xx or 5xx)
+            with open(filepath, 'wb') as f:
+                f.write(response.content)
+            return response
+        except requests.exceptions.RequestException as e:
+            print(f"Failed to download {url}. Error: {e}")
+            return None
+
+    # --- Refactored main function ---
+    def _update_csv_files_web(self, filelist):
+        """
+        Checks for and downloads updated CSV files from the web, using flags
+        to control location-specific and date-checking logic.
+        """
+        print(f"Updating CSV files from web...\nFiles to check: {filelist}")
+        data_path = get_data_path()
+        current_location = self.location_var.get()
+
+        # Configuration now drives all logic paths
+        file_configs = {
+            'Activities': {
+                'path_var': self.activities_csv_path,
+                'ui_element': self.update_activities,
+                'is_location_specific': False,
+                'requires_date_check': False, # Always update this file
+            },
+            'Divesites': {
+                'path_var': self.divesites_csv_path,
+                'ui_element': self.update_divesites,
+                'is_location_specific': True,
+                'requires_date_check': True,
+            },
+            'Species': {
+                'path_var': self.fish_csv_path,
+                'ui_element': self.update_species,
+                'is_location_specific': True,
+                'requires_date_check': True,
+            },
+            'Photographers': {
+                'path_var': self.users_csv_path,
+                'ui_element': self.update_users,
+                'is_location_specific': False,
+                'requires_date_check': True, # Now correctly checks the date
+            }
+        }
+
+        for file in filelist:
+            cleaned_file_name = file.replace('%20', ' ')
+            
+            for prefix, config in file_configs.items():
+                if not cleaned_file_name.startswith(prefix):
+                    continue
+
+                # 1. Determine the local file to compare against (old_filepath)
+                old_filepath = None
+                if config['is_location_specific']:
+                    if current_location not in cleaned_file_name:
+                        continue # Not for the selected location
+                    # Find local file for the specific location, e.g., "Divesites_Egypt*.csv"
+                    local_files = list(data_path.glob(f"{prefix}_{current_location}*.csv"))
+                    if local_files:
+                        old_filepath = local_files[0]
+                else: # Not location-specific
+                    if config['path_var'].get():
+                        old_filepath = Path(config['path_var'].get())
+
+                # 2. Decide if an update is needed
+                should_update = False
+                if not config['requires_date_check']:
+                    should_update = True # e.g., Activities file
+                else:
+                    new_date_match = re.search(r'(\d{4}-\d{2}-\d{2})', cleaned_file_name)
+                    if not new_date_match:
+                        continue # Malformed remote filename
+                    new_date_str = new_date_match.group(1)
+
+                    if not old_filepath or not old_filepath.exists():
+                        # No local file exists, so update
+                        should_update = True
+                        print(f"No local file for {prefix} found. Downloading.")
+                    else:
+                        local_date_match = re.search(r'(\d{4}-\d{2}-\d{2})', old_filepath.name)
+                        if not local_date_match:
+                            should_update = True # Local file malformed, update it
+                        elif new_date_str > local_date_match.group(1):
+                            should_update = True # Remote file is newer
+                        else:
+                            config['ui_element'].config(text="up-to-date")
+                
+                # 3. Perform update if needed
+                if should_update:
+                    print(f"Updating: {cleaned_file_name}")
+                    new_filepath = data_path / cleaned_file_name
+                    response = self._download_file(get_download_url(file), new_filepath)
+
+                    if response:
+                        # Remove old file only if it existed and we're replacing it
+                        if old_filepath and old_filepath.exists() and old_filepath != new_filepath:
+                            os.remove(old_filepath)
+                        config['path_var'].set(str(new_filepath))
+                        config['ui_element'].config(text="updated")
+                    else:
+                        config['ui_element'].config(text="Error")
+
+                break # Move to next file from web
+
+        self._load_data()
+        self._save_personal_config()
+
+    def _update_csv_files_dnd(self, event):
         files = self.splitlist(event.data)
         for file in files:
             if 'Species' in file:
-                shutil.copy(file, get_data_path() / "Species.csv")
+                shutil.copy(file, get_data_path() / file)
                 self.update_species.config(text="Species CSV updated")
             elif 'Photographers' in file:
-                shutil.copy(file, get_data_path() / "Photographers.csv")
+                shutil.copy(file, get_data_path() / file)
                 self.update_users.config(text="Photographers CSV updated")
             elif 'Divesites' in file:
-                shutil.copy(file, get_data_path() / "Divesites.csv")
+                shutil.copy(file, get_data_path() / file)
                 self.update_divesites.config(text="Divesites CSV updated")
             elif 'Activities' in file:
-                shutil.copy(file, get_data_path() / "Activities.csv")
+                shutil.copy(file, get_data_path() / file)
                 self.update_activities.config(text="Activities CSV updated")
         self._load_data()
 
@@ -284,7 +442,7 @@ class FishRenamer(TkinterDnD.Tk):
             },
             {
                 'label': 'Site', 'var': 'cb_site',
-                #'values': self.divesites_df[['Location', 'Site']].apply(lambda x: ', '.join(x), axis=1).tolist(),
+                #'values': self.divesites_df[['Area', 'Site']].apply(lambda x: ', '.join(x), axis=1).tolist(),
                 'values': ['Nowhere'],
                 'row': 4, 'col': 1
             },
@@ -309,7 +467,7 @@ class FishRenamer(TkinterDnD.Tk):
     def _open_googlemaps(self, event):
         location, site = self.cb_site.get().split(", ")
         coordinates = self.divesites_df[
-            (self.divesites_df['Location'] == location) & 
+            (self.divesites_df['Area'] == location) & 
             (self.divesites_df['Site'] == site)
         ][['latitude', 'longitude']].values[0]
         os.system(f"start https://maps.google.com/?q={coordinates[0]},{coordinates[1]}")
@@ -343,6 +501,15 @@ class FishRenamer(TkinterDnD.Tk):
         config.set('USER_PREFS', 'author', self.cb_author.get())
         config.set('USER_PREFS', 'site', self.cb_site.get())
         config.set('USER_PREFS', 'activity', self.cb_activity.get())
+
+        if not config.has_section('PATHS'):
+            config.add_section('PATHS')
+        config['PATHS'] = {
+            'Species': self.fish_csv_path.get(),
+            'Photographers': self.users_csv_path.get(),
+            'Divesites': self.divesites_csv_path.get(),
+            'Activities': self.activities_csv_path.get()
+        }
         
         try:
             with open(config_path, 'w') as configfile:
@@ -359,6 +526,10 @@ class FishRenamer(TkinterDnD.Tk):
             self.cb_author.set('')
             self.cb_site.set('')
             self.cb_activity.set('')
+            self.fish_csv_path.set(str(self.data_dir / "Species_Bangka 2025-04-15.csv"))
+            self.users_csv_path.set(str(self.data_dir / "Photographers_all 2025-04-15.csv"))
+            self.divesites_csv_path.set(str(self.data_dir / "Divesites_Bangka 2025-04-15.csv"))
+            self.activities_csv_path.set(str(self.data_dir / "Activities.csv"))
             return
 
         config = configparser.ConfigParser()
@@ -368,6 +539,10 @@ class FishRenamer(TkinterDnD.Tk):
         self.cb_author.set(config.get('USER_PREFS', 'author', fallback=''))
         self.cb_site.set(config.get('USER_PREFS', 'site', fallback=''))
         self.cb_activity.set(config.get('USER_PREFS', 'activity', fallback=''))
+        self.fish_csv_path.set(config.get('PATHS', 'Species', fallback=str(self.data_dir / "Species_Bangka 2025-04-15.csv")))
+        self.users_csv_path.set(config.get('PATHS', 'Photographers', fallback=str(self.data_dir / "Photographers_all 2025-04-15.csv")))
+        self.divesites_csv_path.set(config.get('PATHS', 'Divesites', fallback=str(self.data_dir / "Divesites_Bangka 2025-04-15.csv")))
+        self.activities_csv_path.set(config.get('PATHS', 'Activities', fallback=str(self.data_dir / "Activities.csv")))
 
 
     # def _save_preferences(self):
@@ -472,7 +647,7 @@ class FishRenamer(TkinterDnD.Tk):
         # extension = os.path.splitext(path)[1]
         # if extension.lower() != '.arw':
         #     location, site = self.cb_site.get().split(", ")
-        #     lat, lon = self.divesites_df[(self.divesites_df['Location'] == location) & (self.divesites_df['Site'] == site)][['latitude', 'longitude']].values[0]
+        #     lat, lon = self.divesites_df[(self.divesites_df['Area'] == location) & (self.divesites_df['Site'] == site)][['latitude', 'longitude']].values[0]
         #     lat_dms = self._decdeg2dms(lat)
         #     lon_dms = self._decdeg2dms(lon)
         #     exif["Exif.GPSInfo.GPSLatitude"] = lat_dms
@@ -508,7 +683,7 @@ class FishRenamer(TkinterDnD.Tk):
         author_code = self.users_df[self.users_df['Full name'] == author]['Namecode'].values[0]
         site = self.cb_site.get()
         location, site = site.split(", ")
-        site_string = self.divesites_df[(self.divesites_df['Location'] == location) & (self.divesites_df['Site'] == site)]['Site string'].values[0]
+        site_string = self.divesites_df[(self.divesites_df['Area'] == location) & (self.divesites_df['Site'] == site)]['Site string'].values[0]
         activity = self.cb_activity.get()
         if gps_set:
             return f"{author_code}_{site_string}_{filedate}_{activity}_G_{filename}{extension}"
@@ -547,7 +722,7 @@ class FishRenamer(TkinterDnD.Tk):
         author_code = self.users_df[self.users_df['Full name'] == author]['Namecode'].values[0] if self.editing_fields[7] else info[7]
         site = self.cb_site.get()
         location, site = site.split(", ")
-        site_string = self.divesites_df[(self.divesites_df['Location'] == location) & (self.divesites_df['Site'] == site)]['Site string'].values[0] if self.editing_fields[8] else info[8]
+        site_string = self.divesites_df[(self.divesites_df['Area'] == location) & (self.divesites_df['Site'] == site)]['Site string'].values[0] if self.editing_fields[8] else info[8]
         date = info[9]
         time = info[10]
         activity = self.cb_activity.get() if self.editing_fields[11] else info[11]
@@ -611,7 +786,7 @@ class FishRenamer(TkinterDnD.Tk):
         if colour: self.cb_colour.set(next((k for k, v in self.colour_dict.items() if v == colour), None))
         if behaviour: self.cb_behaviour.set(next((k for k, v in self.behaviour_dict.items() if v == behaviour), None))
         if author: self.cb_author.set(self.users_df[self.users_df['Namecode'] == author]['Full name'].values[0])
-        if site: self.cb_site.set(self.divesites_df[self.divesites_df['Site string'] == site]['Location'].values[0] + ", " + self.divesites_df[self.divesites_df['Site string'] == site]['Site'].values[0])
+        if site: self.cb_site.set(self.divesites_df[self.divesites_df['Site string'] == site]['Area'].values[0] + ", " + self.divesites_df[self.divesites_df['Site string'] == site]['Site'].values[0])
         if activity: self.cb_activity.set(activity)
 
     def _dnd_files(self, event):
@@ -729,16 +904,16 @@ class FishRenamer(TkinterDnD.Tk):
         """Load data files using paths from configuration"""
         try:
             # Load fish data
-            self.fish_df = pd.read_csv(get_data_path() / 'Species.csv', sep=';').fillna('')
+            self.fish_df = pd.read_csv(get_data_path() / self.fish_csv_path.get(), sep=';').fillna('')
             #self.status.insert(tk.END, "\nLoaded species data from: " + self.fish_csv_path.get())
             # Load photographers
-            self.users_df = pd.read_csv(get_data_path() / 'Photographers.csv', sep=';')
+            self.users_df = pd.read_csv(get_data_path() / self.users_csv_path.get(), sep=';')
             #self.status.insert(tk.END, "\nLoaded photographers from: " + self.users_csv_path.get())
             # Load divesites
-            self.divesites_df = pd.read_csv(get_data_path() / 'Divesites.csv', sep=';')
+            self.divesites_df = pd.read_csv(get_data_path() / self.divesites_csv_path.get(), sep=';')
             #self.status.insert(tk.END, "\nLoaded divesites from: " + self.divesites_csv_path.get())
             # Load activities
-            self.activities_df = pd.read_csv(get_data_path() / 'Activities.csv', sep=';')
+            self.activities_df = pd.read_csv(get_data_path() / self.activities_csv_path.get(), sep=';')
             #self.status.insert(tk.END, "\nLoaded activities from: " + self.activities_csv_path.get())
     
         except FileNotFoundError as e:
@@ -761,10 +936,13 @@ class FishRenamer(TkinterDnD.Tk):
 
             if hasattr(self, 'users_df'):
                 self.cb_author['values'] = self.users_df['Full name'].tolist()
+                self.cb_author.current(0)
             if hasattr(self, 'divesites_df'):
-                self.cb_site['values'] = self.divesites_df[['Location', 'Site']].sort_values(by=['Location', 'Site'], inplace=False).apply(lambda x: ', '.join(x), axis=1).tolist()
+                self.cb_site['values'] = self.divesites_df[['Area', 'Site']].sort_values(by=['Area', 'Site'], inplace=False).apply(lambda x: ', '.join(x), axis=1).tolist()
+                self.cb_site.current(0)
             if hasattr(self, 'activities_df'):
                 self.cb_activity['values'] = self.activities_df['activity'].tolist()
+                self.cb_activity.current(0)
 
     def _build_tree(self):
         for col in list(self.tree_columns):
