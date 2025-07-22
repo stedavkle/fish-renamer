@@ -3,6 +3,8 @@ tkinterdnd2
 exifread
 pandas
 pillow
+pyinstaller
+nuitka
 imageio
 numpy
 requests
