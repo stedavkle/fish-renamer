@@ -53,7 +53,7 @@ jobs:
       
       - name: Build with Nuitka
         run: |
-          python -m nuitka --standalone --onefile --output-dir=distx64nuitka --windows-icon-from-ico=config/icon.png --include-data-dir="config=config" --windows-console-mode=disable --plugin-enable=upx --upx-binary="$env:LOCALAPPDATA\upx-5.0.0-win64\upx-5.0.0-win64\upx.exe" --enable-plugin=tk-inter --disable-ccache daves-fish-renamer.py
+          python -m nuitka --standalone --onefile --output-dir=distx64nuitka --windows-icon-from-ico=config/icon.png --include-data-dir="config=config" --windows-console-mode=disable --plugin-enable=upx --upx-binary="$env:LOCALAPPDATA\upx-5.0.0-win64\upx-5.0.0-win64\upx.exe" --enable-plugin=tk-inter --disable-ccache main.py
       
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
@@ -84,7 +84,7 @@ jobs:
       
       - name: Build with Nuitka
         run: |
-          python -m nuitka --standalone --onefile --output-dir=distmipsnuitka --macos-create-app-bundle --macos-app-icon=config/icon.png --include-data-dir="config=config" --enable-plugin=tk-inter --disable-ccache daves-fish-renamer.py
+          python -m nuitka --standalone --onefile --output-dir=distmipsnuitka --macos-create-app-bundle --macos-app-icon=config/icon.png --include-data-dir="config=config" --enable-plugin=tk-inter --disable-ccache main.py
       
       - name: Zip macOS app
         run: |

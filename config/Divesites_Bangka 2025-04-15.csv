@@ -1,4 +1,4 @@
-Site string;Country;Location;Site;Site code;latitude;longitude
+Site string;Country;Area;Site;Site code;latitude;longitude
 IDN-Bangka-AKP;IDN;Bangka;Areng Kambing Pasir;AKP;1.76885;125.17675
 IDN-Bangka-AKW;IDN;Bangka;Areng Kambing Wall;AKW;1.76828;125.17596
 IDN-Bangka-BAN;IDN;Bangka;Batu Angus;BAN;1.78149;125.18897
