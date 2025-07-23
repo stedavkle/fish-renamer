@@ -88,3 +88,12 @@ class DataManager:
             lambda row: f"{row['Area']}, {row['Site']}", axis=1
         )
         return site_series.tolist()
+    
+    def get_lat_long_from_site(self, site_string):
+        """Returns the latitude and longitude for a given site string."""
+        location, site = site_string.split(", ")
+        coordinates = self.divesites_df[
+            (self.divesites_df['Area'] == location) & 
+            (self.divesites_df['Site'] == site)
+        ][['latitude', 'longitude']].values[0]
+        return coordinates if len(coordinates) == 2 else (None, None)

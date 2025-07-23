@@ -47,7 +47,7 @@ class MainWindow(TkinterDnD.Tk):
         self._setup_edit_frame()
         self._setup_attribute_comboboxes()
         self._setup_info_comboboxes()
-        # self._setup_Maps_link() # Assuming _open_googlemaps is also implemented
+        self._setup_maps_link() # Assuming _open_googlemaps is also implemented
         self._setup_status_text()
         self._build_tree_headers()
         self._toggle_extended_info()  # Set initial mode to Basic
@@ -148,6 +148,15 @@ class MainWindow(TkinterDnD.Tk):
         ]
         self._setup_combobox_group(self.bottom_frame, configs)
 
+    def _open_googlemaps(self, event):
+        coordinates = self.data.get_lat_long_from_site(self.cb_site.get())
+        os.system(f"start https://maps.google.com/?q={coordinates[0]},{coordinates[1]}")
+
+    def _setup_maps_link(self):
+        self.link = tk.Label(self.bottom_frame, text="Google Maps", fg="blue", cursor="hand2")
+        self.link.grid(row=6, column=1, padx=5, pady=2, sticky='ew')
+        self.link.bind("<Button-1>", self._open_googlemaps)
+
     def _setup_edit_frame(self):
         self.edit_frame = ttk.Frame(self.bottom_frame)
         self.edit_frame.grid(row=1, column=3, sticky="nsew")
@@ -215,10 +224,6 @@ class MainWindow(TkinterDnD.Tk):
                 return
 
             # Map the 13-element array to the 10 UI controls
-            print("is_same:", is_same, "values:", values)
-            # ['Acanthuridae' 'Acanthurus' 'lineatus' 'ok' 'ad' 'ty' 'zz' 'Anony' 'IDN-Bangka-BAN' '2025-04-01' '11-42-56' 'dive' 'DST0960']
-
-            # family, genus, species, confidence, phase, colour, behaviour, author, site, activity
             ui_flags = is_same[[0, 1, 2, 3, 4, 5, 6, 7, 8, 11]]
             ui_values = values[[0, 1, 2, 3, 4, 5, 6, 7, 8, 11]]
 
@@ -311,8 +316,6 @@ class MainWindow(TkinterDnD.Tk):
         self.cb_activity.state(['!disabled'] if activity else ['disabled'])
     
     def _set_checkboxes(self, family, genus, species, confidence, phase, colour, behaviour, author, site, activity):
-        print("Setting checkboxes with values:")
-        print(family, genus, species, confidence, phase, colour, behaviour, author, site, activity)
         if family:
             self.cb_family.set(family)
             self.set_family(None)  # Trigger to update genus/species comboboxes based on family
@@ -325,7 +328,6 @@ class MainWindow(TkinterDnD.Tk):
         # reverse lookup
         if colour: self.cb_colour.set(self.assembler.COLOUR_DICT_REVERSE.get(colour, "typical colour"))
         if behaviour: self.cb_behaviour.set(self.assembler.BEHAVIOUR_DICT_REVERSE.get(behaviour, "not specified"))
-        print("Author:", author, self.data.get_user_name(author), "Site:", site)
         if author: self.cb_author.set(self.data.get_user_name(author))
         if site: self.cb_site.set(self.data.get_divesite_area_site(site))
         if activity: self.cb_activity.set(activity)
@@ -357,13 +359,6 @@ class MainWindow(TkinterDnD.Tk):
         df = self.data.fish_df
         mask = df.apply(lambda row: all([any([substring.lower() in value.lower() for value in row.values]) for substring in search_substrings]), axis=1)
         self.fill_tree(df[mask].values.tolist())
-
-        # search_string = self.search_field.get()
-        # search_substrings = search_string.split()
-        # # get the data from the dataframe
-        # fish_filtered = self.fish_df[self.fish_df.apply(lambda row: all([any([substring.lower() in value.lower() for value in row.values]) for substring in search_substrings]), axis=1)]
-        # # insert the data into the tree
-        # self.fill_tree(self.sort_fish_df(fish_filtered).values.tolist())
 
     def set_family(self, event):
         family = self.cb_family.get()
