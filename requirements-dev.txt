@@ -7,3 +7,4 @@ requests
 imageio
 pyinstaller
 nuitka
+selenium
