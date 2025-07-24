@@ -4,5 +4,6 @@ exifread
 pandas
 numpy
 requests
+imageio
 pyinstaller
 nuitka

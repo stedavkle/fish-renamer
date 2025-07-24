@@ -3,4 +3,5 @@ tkinterdnd2
 exifread
 pandas
 numpy
+imageio
 requests
