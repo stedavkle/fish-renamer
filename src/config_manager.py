@@ -11,6 +11,7 @@ class ConfigManager:
         self.config = configparser.ConfigParser()
         self.user_prefs = {}
         self.paths = {}
+        self.misc = {}
         self.load()
 
     def load(self):
@@ -22,6 +23,7 @@ class ConfigManager:
         self.config.read(self.config_path)
         self.user_prefs = dict(self.config.items('USER_PREFS'))
         self.paths = dict(self.config.items('PATHS'))
+        self.misc = dict(self.config.items('MISC'))
         
         # Ensure essential paths have defaults if missing
         if not self.paths:
@@ -32,6 +34,7 @@ class ConfigManager:
         """Saves the current configuration to the INI file."""
         self.config['USER_PREFS'] = self.user_prefs
         self.config['PATHS'] = self.paths
+        self.config['MISC'] = self.misc
         try:
             with self.config_path.open('w') as configfile:
                 self.config.write(configfile)
@@ -44,6 +47,7 @@ class ConfigManager:
     def set_path(self, key, value: Path):
         print(f"Setting path for {key} to {value}")
         self.paths[key] = value # Store only the filename
+        self.save()
 
     def get_user_pref(self, key, fallback=''):
         user = self.user_prefs.get(key, fallback)
@@ -51,6 +55,15 @@ class ConfigManager:
     
     def set_user_pref(self, key, value):
         self.user_prefs[key] = value
+        self.save()
+
+    def get_misc(self, key, fallback=''):
+        return self.misc.get(key, fallback)
+    
+    def set_misc(self, key, value):
+        """Sets a miscellaneous configuration value."""
+        self.misc[key] = value
+        self.save()
 
     def _set_defaults(self):
         """Sets default values for a fresh configuration."""
@@ -60,8 +73,9 @@ class ConfigManager:
         
     def _set_default_paths(self):
         self.paths = {
-            'species': "Species_Bangka 2025-04-15.csv",
+            'species': "Species_Indopacific 2025-04-15.csv",
             'photographers': "Photographers_all 2025-04-15.csv",
-            'divesites': "Divesites_Bangka 2025-04-15.csv",
+            'divesites': "Divesites_Indopacific 2025-04-15.csv",
             'activities': "Activities.csv"
         }
+        self.save()

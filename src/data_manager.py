@@ -5,36 +5,59 @@ class DataManager:
     """Loads and manages all application data from CSV files."""
     def __init__(self, config_manager):
         self.config_manager = config_manager
+        self.fish_df_raw = pd.DataFrame()
+        self.divesites_df_raw = pd.DataFrame()
+        
         self.fish_df = pd.DataFrame()
         self.users_df = pd.DataFrame()
         self.divesites_df = pd.DataFrame()
         self.activities_df = pd.DataFrame()
+
         self.family_default = '0-Fam'
         self.genus_default = 'genus'
         self.species_default = 'spec'
+        self.location = self.config_manager.get_misc('location', '')
 
     def load_all_data(self):
         """Loads all CSVs into pandas DataFrames based on paths from config."""
         load_map = {
-            'species': ('fish_df', 'Loaded species data'),
+            'species': ('fish_df_raw', 'Loaded species data'),
             'photographers': ('users_df', 'Loaded photographers'),
-            'divesites': ('divesites_df', 'Loaded divesites'),
+            'divesites': ('divesites_df_raw', 'Loaded divesites'),
             'activities': ('activities_df', 'Loaded activities'),
         }
         messages = []
         for key, (df_attr, msg) in load_map.items():
             try:
                 path = self.config_manager.get_path(key)
-                print(f"Loading {key} data from {path}")
                 if path.exists():
                     df = pd.read_csv(path, sep=';').fillna('')
                     setattr(self, df_attr, df)
+
                     messages.append(f"{msg} from {path.name}")
                 else:
                     messages.append(f"Warning: {key} file not found at {path}")
             except Exception as e:
                 messages.append(f"Error loading {key} data: {e}")
+        self.filter_by_location()
         return "\n".join(messages)
+
+    def filter_by_location(self, location=''):
+        if location != '':
+            self.location = location
+
+        filter_map = {
+            'species': ('fish_df_raw', 'fish_df', ["Family", "Genus", "Species", "Species English"]),
+            'divesites': ('divesites_df_raw', 'divesites_df', ["Area", "Site", "Site string", "latitude", "longitude"]),
+        }
+        for key, (df_attr_raw, df_attr_loc, columns) in filter_map.items():
+            df_raw = getattr(self, df_attr_raw)
+            if self.location != '' and self.location in df_raw.columns:
+                df = df_raw[df_raw[self.location] == 1]
+                setattr(self, df_attr_loc, df[columns])
+            else:
+                setattr(self, df_attr_loc, df_raw[columns])
+            
 
     def get_all_fish(self):
         if self.fish_df.empty:

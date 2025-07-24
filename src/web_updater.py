@@ -150,7 +150,7 @@ class WebUpdater:
                     locations.add(match.group(1))
         return sorted(list(locations))
 
-    def run_update(self, file_list, configs, current_location):
+    def run_update(self, file_list, configs):
         """The main update logic, refactored from the original class."""
         update_statuses = {}
         newest_files = {}
@@ -162,14 +162,8 @@ class WebUpdater:
                     continue
 
                 old_filepath = None
-                if config['is_location_specific']:
-                    if current_location not in cleaned_file_name:
-                        continue
-                    local_files = list(self.data_path.glob(f"{prefix}_{current_location}*.csv"))
-                    if local_files: old_filepath = local_files[0]
-                else:
-                    path_str = config['path_var']
-                    if path_str: old_filepath = Path(path_str)
+                path_str = config['path_var']
+                if path_str: old_filepath = Path(path_str)
 
                 should_update, reason = self._check_if_update_needed(config, cleaned_file_name, old_filepath)
                 

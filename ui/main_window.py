@@ -54,7 +54,7 @@ class MainWindow(TkinterDnD.Tk):
 
     def _setup_icon(self):
         try:
-            icon_path = app_utils.get_app_path() / 'config' / 'icon.png'
+            icon_path = app_utils.get_app_path().parent / 'config' / 'icon.png'
             ico = Image.open(icon_path)
             photo = ImageTk.PhotoImage(ico)
             self.wm_iconphoto(False, photo)
@@ -177,10 +177,10 @@ class MainWindow(TkinterDnD.Tk):
         """Called to reload all data and refresh UI elements that depend on it."""
         status = self.data.load_all_data()
         self._notice(status)
-        self._update_all_comboboxes()
+        self.update_all_comboboxes()
         self.config_manager.save() # CHANGED
 
-    def _update_all_comboboxes(self):
+    def update_all_comboboxes(self):
         self.cb_family['values'] = ['0-Fam'] + self.data.get_unique_values('Family')
         self.cb_family.set(self.data.family_default)
         self.cb_genus['values'] = ['genus'] + self.data.get_unique_values('Genus')
@@ -206,8 +206,8 @@ class MainWindow(TkinterDnD.Tk):
 
     def _show_preferences(self):
         """Opens the preferences and updates dialog window."""
-        prefs_win = PreferencesWindow(self, self.config_manager, self.web_updater) # CHANGED
-        self.wait_window(prefs_win)
+        self.prefs_win = PreferencesWindow(self, self.config_manager, self.web_updater) # CHANGED
+        self.wait_window(self.prefs_win)
 
     def _dnd_files(self, event):
         """Handles drag-and-drop events for renaming files."""

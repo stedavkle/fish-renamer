@@ -25,7 +25,7 @@ def initialize_data_files():
     data_dir = get_data_path()
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    config_source_dir = get_app_path() / 'config'
+    config_source_dir = get_app_path().parent / 'config'
     if not config_source_dir.exists():
         print(f"Warning: Config source directory not found at {config_source_dir}")
         return
