@@ -1,6 +1,8 @@
 # ui/preferences_window.py
 import tkinter as tk
 from tkinter import ttk
+import threading
+import time
 
 class PreferencesWindow(tk.Toplevel):
     """The 'Preferences' dialog for managing CSV paths and web updates."""
@@ -53,6 +55,14 @@ class PreferencesWindow(tk.Toplevel):
 
     def _fetch_remote_files(self):
         self.update_status_label.config(text="Status: Fetching...")
+        connected = False
+        def callback(status):
+            self.update_status_label.config(text="Status: " + status)
+            self.update_idletasks()
+
+        # Start the web updater in a separate thread to avoid blocking the UI
+        self.web_updater.connect(callback)
+        
         self.remote_filelist, status_msg = self.web_updater.fetch_file_list()
         self.update_status_label.config(text=f"Status: {status_msg}")
 
@@ -82,7 +92,10 @@ class PreferencesWindow(tk.Toplevel):
         for prefix, config in update_configs.items():
              config['path_var'] = self.config_manager.get_path(prefix.lower())
 
-        statuses = self.web_updater.run_update(self.remote_filelist, update_configs, self.location_var.get())
+        statuses, updated_configs = self.web_updater.run_update(self.remote_filelist, update_configs, self.location_var.get())
+        # Update the config manager with new paths
+        for prefix, config in updated_configs.items():
+            self.config_manager.set_path(prefix.lower(), config['path_var'])
         
         # Update UI based on results from the logic class
         for name, label in self.file_status_labels.items():

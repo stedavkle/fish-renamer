@@ -42,7 +42,7 @@ class ConfigManager:
         return self.data_dir / self.paths.get(key, "")
 
     def set_path(self, key, value: Path):
-        self.paths[key] = value.name # Store only the filename
+        self.paths[key] = value # Store only the filename
 
     def get_user_pref(self, key, fallback=''):
         return self.user_prefs.get(key, fallback)
