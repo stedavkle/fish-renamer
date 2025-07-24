@@ -1,7 +1,7 @@
 # config_manager.py
 import configparser
 from pathlib import Path
-import app_utils
+from src import app_utils
 
 class ConfigManager:
     """Manages reading and writing application settings to config.ini."""
@@ -42,10 +42,12 @@ class ConfigManager:
         return self.data_dir / self.paths.get(key, "")
 
     def set_path(self, key, value: Path):
+        print(f"Setting path for {key} to {value}")
         self.paths[key] = value # Store only the filename
 
     def get_user_pref(self, key, fallback=''):
-        return self.user_prefs.get(key, fallback)
+        user = self.user_prefs.get(key, fallback)
+        return user if user != '' else fallback
     
     def set_user_pref(self, key, value):
         self.user_prefs[key] = value

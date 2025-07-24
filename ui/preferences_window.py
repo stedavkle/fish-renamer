@@ -92,10 +92,14 @@ class PreferencesWindow(tk.Toplevel):
         for prefix, config in update_configs.items():
              config['path_var'] = self.config_manager.get_path(prefix.lower())
 
-        statuses, updated_configs = self.web_updater.run_update(self.remote_filelist, update_configs, self.location_var.get())
-        # Update the config manager with new paths
-        for prefix, config in updated_configs.items():
-            self.config_manager.set_path(prefix.lower(), config['path_var'])
+        statuses, newest_files = self.web_updater.run_update(self.remote_filelist, update_configs, self.location_var.get())
+
+        print("Update statuses:", statuses)
+        print("Newest files:", newest_files)
+        # # Update the config manager with new paths
+        for prefix, path in newest_files.items():
+            self.config_manager.set_path(prefix.lower(), path)
+        self.config_manager.save()
         
         # Update UI based on results from the logic class
         for name, label in self.file_status_labels.items():

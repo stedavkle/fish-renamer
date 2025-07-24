@@ -1,7 +1,5 @@
-# main.py
-import app_utils
 from ui.main_window import MainWindow
-from app_utils import initialize_data_files
+from src.app_utils import initialize_data_files
 
 if __name__ == '__main__':
     # 1. Ensure data directory and default files exist

@@ -153,6 +153,7 @@ class WebUpdater:
     def run_update(self, file_list, configs, current_location):
         """The main update logic, refactored from the original class."""
         update_statuses = {}
+        newest_files = {}
         for file in file_list:
             cleaned_file_name = file.replace('%20', ' ')
             
@@ -175,12 +176,11 @@ class WebUpdater:
                 if should_update:
                     status = self._perform_download(file, cleaned_file_name, old_filepath)
                     update_statuses[prefix] = status
-                    if status == "updated":
-                        configs[prefix]['path_var'] = str(self.data_path / cleaned_file_name)
                 else:
                     update_statuses[prefix] = reason
+                newest_files[prefix] = cleaned_file_name
                 break
-        return update_statuses, configs
+        return update_statuses, newest_files
 
     def _check_if_update_needed(self, config, cleaned_file_name, old_filepath):
         print(f"Checking if update is needed for {old_filepath}")

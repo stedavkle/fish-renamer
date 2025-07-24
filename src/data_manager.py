@@ -25,6 +25,7 @@ class DataManager:
         for key, (df_attr, msg) in load_map.items():
             try:
                 path = self.config_manager.get_path(key)
+                print(f"Loading {key} data from {path}")
                 if path.exists():
                     df = pd.read_csv(path, sep=';').fillna('')
                     setattr(self, df_attr, df)

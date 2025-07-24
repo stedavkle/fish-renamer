@@ -6,13 +6,13 @@ import os
 from PIL import Image, ImageTk
 
 # Import refactored components
-from config_manager import ConfigManager
-from data_manager import DataManager
-from filename_assembler import FilenameAssembler
-from exif_handler import ExifHandler
-from web_updater import WebUpdater
-import app_utils
+from src.config_manager import ConfigManager
+from src.data_manager import DataManager
+from src.filename_assembler import FilenameAssembler
+from src.exif_handler import ExifHandler
+from src.web_updater import WebUpdater
 from .preferences_window import PreferencesWindow
+from src import app_utils
 
 class MainWindow(TkinterDnD.Tk):
     """The main application window, focused on UI management."""
@@ -182,20 +182,24 @@ class MainWindow(TkinterDnD.Tk):
 
     def _update_all_comboboxes(self):
         self.cb_family['values'] = ['0-Fam'] + self.data.get_unique_values('Family')
+        self.cb_family.set(self.data.family_default)
         self.cb_genus['values'] = ['genus'] + self.data.get_unique_values('Genus')
+        self.cb_genus.set(self.data.genus_default)
         self.cb_species['values'] = ['spec'] + self.data.get_unique_values('Species')
+        self.cb_species.set(self.data.species_default)
         
         self.cb_author['values'] = self.data.get_unique_values('Full name', 'users_df')
+        self.cb_author.set(0)  # Default to empty string
         
         # CHANGED: Replace the old line with this one
         self.cb_site['values'] = self.data.get_formatted_site_list()
+        self.cb_site.set("Select site")  # Default to empty string
         
         self.cb_activity['values'] = self.data.get_unique_values('activity', 'activities_df')
         
         # Restore selections from config
-        self.cb_author.set(self.config_manager.get_user_pref('author'))
-        self.cb_site.set(self.config_manager.get_user_pref('site'))
-        self.cb_activity.set(self.config_manager.get_user_pref('activity'))
+        self.cb_author.set(self.config_manager.get_user_pref('author', 'Select Photographer'))
+        self.cb_activity.set(self.config_manager.get_user_pref('activity', 'Select activity'))
         
         # Fill tree with all fish initially
         self.fill_tree(self.data.get_all_fish().values.tolist())
