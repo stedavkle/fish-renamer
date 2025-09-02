@@ -199,6 +199,7 @@ class MainWindow(TkinterDnD.Tk):
         
         # Restore selections from config
         self.cb_author.set(self.config_manager.get_user_pref('author', 'Select Photographer'))
+        self.cb_site.set(self.config_manager.get_user_pref('site', 'Select site'))
         self.cb_activity.set(self.config_manager.get_user_pref('activity', 'Select activity'))
         
         # Fill tree with all fish initially

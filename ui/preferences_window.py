@@ -56,7 +56,6 @@ class PreferencesWindow(tk.Toplevel):
             status_label.grid(row=i, column=1, sticky='w', padx=5)
             self.file_status_labels[name] = status_label
 
-
     def _fetch_remote_files(self):
         self.update_status_label.config(text="Status: Fetching...")
         connected = False

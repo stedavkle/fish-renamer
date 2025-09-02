@@ -1,0 +1,118 @@
+Site string;Country;Province;Base;Area;Site;Code;Type of DIVE;latitude;longitude;Bangka;Red Sea
+IDN-Bangka-AB1;IDN;Sulawesi Utara;Bangka;Lembeh;Aer Bajo 1;AB1;sediment;1.48192;125.25325;1;0
+IDN-Bangka-AB2;IDN;Sulawesi Utara;Bangka;Lembeh;Aer Bajo 2;AB2;sediment;1.48374;125.25516;1;0
+IDN-Bangka-AB3;IDN;Sulawesi Utara;Bangka;Lembeh;Aer Bajo 3;AB3;sediment;1.48587;125.25621;1;0
+IDN-Bangka-AKP;IDN;Sulawesi Utara;Bangka;Bangka;Areng Kambing Pasir;AKP;sand;1.76885;125.17675;1;0
+IDN-Bangka-AKW;IDN;Sulawesi Utara;Bangka;Bangka;Areng Kambing Wall;AKW;exposed wall;1.76828;125.17596;1;0
+IDN-Bangka-BAN;IDN;Sulawesi Utara;Bangka;Bangka;Batu Angus;BAN;exposed wall;1.78149;125.18897;1;0
+IDN-Bangka-BBB;IDN;Sulawesi Utara;Bangka;Bangka;Busa Bora Barat;BBB;reef slope;1.74621;125.13657;1;0
+IDN-Bangka-BBE;IDN;Sulawesi Utara;Bangka;Bangka;Batu Belah;BBE;exposed wall;1.77198;125.18195;1;0
+IDN-Bangka-BBK;IDN;Sulawesi Utara;Bangka;Bangka;Busa Bora Kampung;BBK;reef-sediment;1.74511;125.13977;1;0
+IDN-Bangka-BBT;IDN;Sulawesi Utara;Bangka;Bangka;Busa Bora Timur;BBT;reef-sediment;1.73941;125.1445;1;0
+IDN-Bangka-BCA;IDN;Sulawesi Utara;Bangka;Talisei;Batu Cahaya;BCA;exposed wall;1.87404;125.09805;1;0
+IDN-Bangka-BGB;IDN;Sulawesi Utara;Bangka;Bangka;Batu Gosoh Beach;BGB;rocky shallow;1.7993;125.18633;1;0
+IDN-Bangka-BGO;IDN;Sulawesi Utara;Bangka;Bangka;Batu Gosoh;BGO;exposed wall;1.79949;125.18834;1;0
+IDN-Bangka-BGT;IDN;Sulawesi Utara;Bangka;Bangka;Batu Gosoh Towers;BGT;exposed wall;1.8011;125.1881;1;0
+IDN-Bangka-BKU;IDN;Sulawesi Utara;Bangka;Bangka;Buluh Kuning;BKU;fragile reef;1.7531;125.13103;1;0
+IDN-Bangka-BMA;IDN;Sulawesi Utara;Bangka;Pulisan;Batu Mandi;BMA;exposed wall;1.68782;125.16176;1;0
+IDN-Bangka-BTA;IDN;Sulawesi Utara;Bangka;Bangka;Batu Tartaruga;BTA;exposed wall;1.78816;125.18759;1;0
+IDN-Bangka-BTI;IDN;Sulawesi Utara;Bangka;Bangka;Batu Tiga;BTI;exposed wall;1.76605;125.17182;1;0
+IDN-Bangka-BTO;IDN;Sulawesi Utara;Bangka;Bangka;Batu Toto;BTO;exposed wall;1.77468;125.18602;1;0
+IDN-Bangka-DKA;IDN;Sulawesi Utara;Bangka;Bunaken;Depan Kampung;DKA;drop-off;1.59374;124.77554;1;0
+IDN-Bangka-EFR;IDN;Sulawesi Utara;Bangka;Pulisan;Efrata;EFR;reef-sediment;1.68039;125.15334;1;0
+IDN-Bangka-HAB;IDN;Sulawesi Utara;Bangka;Lembeh;Hairball;HAB;sediment;1.49754;125.24193;1;0
+IDN-Bangka-HRJ;IDN;Sulawesi Utara;Bangka;Bangka;Coral Eye HR Jetty;HRJ;reef-sediment;1.75103;125.13304;1;0
+IDN-Bangka-HRN;IDN;Sulawesi Utara;Bangka;Bangka;Coral Eye HR North;HRN;reef-sediment;1.75136;125.13261;1;0
+IDN-Bangka-HRS;IDN;Sulawesi Utara;Bangka;Bangka;Coral Eye HR South;HRS;reef-sediment;1.74973;125.13368;1;0
+IDN-Bangka-JMA;IDN;Sulawesi Utara;Bangka;Siladen;Jalan Masuk;JMA;reef-sediment;1.58084;124.81127;1;0
+IDN-Bangka-KAH;IDN;Sulawesi Utara;Bangka;Bangka;Kahuku Sekolah;KAH;sediment;1.79773;125.11845;1;0
+IDN-Bangka-KIN;IDN;Sulawesi Utara;Bangka;Talisei;Kinabuhutan;KIN;reef-sediment;1.84588;125.09623;1;0
+IDN-Bangka-LAK;IDN;Sulawesi Utara;Bangka;Gangga;Lakehe;LAK;rubble;1.77143;125.05984;1;0
+IDN-Bangka-LE1;IDN;Sulawesi Utara;Bangka;Bunaken;Lekuan 1;LE1;drop-off;1.59466;124.77287;1;0
+IDN-Bangka-LE2;IDN;Sulawesi Utara;Bangka;Bunaken;Lekuan 2;LE2;drop-off;1.59565;124.76845;1;0
+IDN-Bangka-LE3;IDN;Sulawesi Utara;Bangka;Bunaken;Lekuan 3;LE3;drop-off;1.60159;124.76553;1;0
+IDN-Bangka-LHG;IDN;Sulawesi Utara;Bangka;Bangka;Lihunu's Garden;LHG;reef-sediment;1.75388;125.15072;1;0
+IDN-Bangka-LIB;IDN;Sulawesi Utara;Bangka;Talisei;Lighthouse Beach;LIB;reef-sediment;1.862199;125.070703;1;0
+IDN-Bangka-LIN;IDN;Sulawesi Utara;Bangka;Bangka;Linggua;LIN;sediment;1.76335;125.13036;1;0
+IDN-Bangka-MAS;IDN;Sulawesi Utara;Bangka;Lembeh;Makawidey south;MAS;reef-sediment;1.48064;125.23854;1;0
+IDN-Bangka-MF1;IDN;Sulawesi Utara;Bangka;Bangka;Mangrove Forest 1;MF1;mangroves;1.75512;125.13298;1;0
+IDN-Bangka-MUK;IDN;Sulawesi Utara;Bangka;Bunaken;Muka Kampung;MUK;drop-off;1.5943661;124.7745613;1;0
+IDN-Bangka-MUX;IDN;Sulawesi Utara;Bangka;Bangka;Murex House Reef;MUX;reef slope;1.73467;125.14946;1;0
+IDN-Bangka-PBE;IDN;Sulawesi Utara;Bangka;Talisei;Picknick Beach;PBE;mangroves;1.85007;125.08723;1;0
+IDN-Bangka-PFA;IDN;Sulawesi Utara;Bangka;Bangka;Pearl Farm;PFA;reef-sediment;1.81134;125.1132;1;0
+IDN-Bangka-PSA;IDN;Sulawesi Utara;Bangka;Bangka;Pulau Sahaung;PSA;reef-sediment;1.74419;125.15362;1;0
+IDN-Bangka-RKA;IDN;Sulawesi Utara;Bangka;Lembeh;Retak Larry;RKA;sediment;1.49375;125.23717;1;0
+IDN-Bangka-ROJ;IDN;Sulawesi Utara;Bangka;Lembeh;Rojos;ROJ;sediment;1.48876;125.25731;1;0
+IDN-Bangka-SA1;IDN;Sulawesi Utara;Bangka;Bangka;Sahaung 1;SA1;exposed wall;1.74157;125.16362;1;0
+IDN-Bangka-SA2;IDN;Sulawesi Utara;Bangka;Bangka;Sahaung 2;SA2;exposed wall;1.74325;125.1628;1;0
+IDN-Bangka-SAP;IDN;Sulawesi Utara;Bangka;Bunaken;Sachiko's Point;SAP;drop-off;1.6304285;124.7710087;1;0
+IDN-Bangka-SBM;IDN;Sulawesi Utara;Bangka;Bangka;Sahaung Bay Mangroves;SBM;fragile reef;1.74717;125.1507;1;0
+IDN-Bangka-SBW;IDN;Sulawesi Utara;Bangka;Bangka;Sahaung Bay West;SBW;reef-sediment;1.74441;125.14912;1;0
+IDN-Bangka-SBY;IDN;Sulawesi Utara;Bangka;Bangka;Sahaung Bay;SBY;sediment;1.74652;125.15611;1;0
+IDN-Bangka-SE1;IDN;Sulawesi Utara;Bangka;Pulisan;Sempini 1;SE1;sediment;1.68457;125.14211;1;0
+IDN-Bangka-SE2;IDN;Sulawesi Utara;Bangka;Pulisan;Sempini 2;SE2;sediment;1.68343;125.14086;1;0
+IDN-Bangka-SIP;IDN;Sulawesi Utara;Bangka;Bangka;Sipi;SIP;sediment;1.77072;125.13056;1;0
+IDN-Bangka-SJE;IDN;Sulawesi Utara;Bangka;Siladen;Siladen Jetty;SJE;reef slope;1.62708;124.80106;1;0
+IDN-Bangka-SSH;IDN;Sulawesi Utara;Bangka;Bangka;Sea Souls House Reef;SSH;reef-sediment;1.80309;125.11709;1;0
+IDN-Bangka-TAH;IDN;Sulawesi Utara;Bangka;Talisei;Tanah Hutan;TAH;reef flat;1.827569;125.051009;1;0
+IDN-Bangka-TCH;IDN;Sulawesi Utara;Bangka;Bangka;The Channel;TCH;reef-sediment;1.82002;125.12034;1;0
+IDN-Bangka-TH1;IDN;Sulawesi Utara;Bangka;Bangka;Tanjung Husi 1;TH1;reef-sediment;1.73554;125.15189;1;0
+IDN-Bangka-TH2;IDN;Sulawesi Utara;Bangka;Bangka;Tanjung Husi 2;TH2;exposed wall;1.73755;125.15199;1;0
+IDN-Bangka-THA;IDN;Sulawesi Utara;Bangka;Talisei;Tanjung Harus;THA;exposed wall;1.88585;125.09972;1;0
+IDN-Bangka-TI2;IDN;Sulawesi Utara;Bangka;Bunaken;Timur 2;TI2;drop-off;1.61046;124.78298;1;0
+IDN-Bangka-TK2;IDN;Sulawesi Utara;Bangka;Lembeh;Tiki 2;TK2;sediment;1.49049;125.23665;1;0
+IDN-Bangka-TKK;IDN;Sulawesi Utara;Bangka;Pulisan;Tanjung Kusu Kusu;TKK;reef slope;1.68933;125.16509;1;0
+IDN-Bangka-TPA;IDN;Sulawesi Utara;Bangka;Pulisan;Tanjung Paradise;TPA;reef-sediment;1.67416;125.11824;1;0
+IDN-Bangka-WAW;IDN;Sulawesi Utara;Bangka;Talisei;Wawunian;WAW;drop-off;1.86103;125.07125;1;0
+IDN-Bangka-YKO;IDN;Sulawesi Utara;Bangka;Pulisan;Yellow Koko;YKO;sediment;1.6721;125.1333;1;0
+IDN-Bangka-AFS;EGY;Marsa Alam;MAlam;Abu Fendera;Habili Abu Fendera South;AFS;reef slope;22.83838;37.3816;0;1
+IDN-Bangka-PA1;EGY;Marsa Alam;MAlam;Abu Fendera;Passage 1;PA1;reef sediment;22.89689;36.29676;0;1
+IDN-Bangka-RHR;EGY;El-Quseir;MB;Roots Red Sea;Housereef;RHR;reef slope;26.20552;34.22001;0;1
+IDN-Bangka-NOS;EGY;El-Quseir;MB;Serib Kebir;North side;NOS;reef slope;26.02403;34.32594;0;1
+IDN-Bangka-SSC;EGY;El-Quseir;MB;Serib Kebir;South side and canyon;SSC;reef slope;26.02223;34.32617;0;1
+IDN-Bangka-FBB;EGY;El-Quseir;MB;Sharm Fugani;Big block;FBB;reef block;25.86962;34.42015;0;1
+IDN-Bangka-FDS;EGY;El-Quseir;MB;Sharm Fugani;Deep seagrass;FDS;seagrass;25.86885;34.42088;0;1
+IDN-Bangka-FEC;EGY;El-Quseir;MB;Sharm Fugani;Eastern coral garden;FEC;coral garden;25.87048;34.42323;0;1
+IDN-Bangka-FEF;EGY;El-Quseir;MB;Sharm Fugani;Erg Fugani;FEF;reef slope;25.86147;34.42808;0;1
+IDN-Bangka-FFE;EGY;El-Quseir;MB;Sharm Fugani;Reef Flats East;FFE;reef flat;25.87079;34.41936;0;1
+IDN-Bangka-FFW;EGY;El-Quseir;MB;Sharm Fugani;Reef Flats Mangroves West;FFW;reef flat;25.86878;34.41601;0;1
+IDN-Bangka-FJE;EGY;El-Quseir;MB;Sharm Fugani;Jetty East;FJE;reef slope;25.8701;34.42054;0;1
+IDN-Bangka-FJW;EGY;El-Quseir;MB;Sharm Fugani;Jetty West;FJW;reef slope;25.86934;34.41789;0;1
+IDN-Bangka-FJS;EGY;El-Quseir;MB;Sharm Fugani;Jetty slope;FJS;reef slope;25.86961;34.41969;0;1
+IDN-Bangka-FMM;EGY;El-Quseir;MB;Sharm Fugani;Marsa Maowao;FMM;reef slope;25.84981;34.43636;0;1
+IDN-Bangka-FNE;EGY;El-Quseir;MB;Sharm Fugani;NE bay tip;FNE;reef slope;25.87142;34.42389;0;1
+IDN-Bangka-FNN;EGY;El-Quseir;MB;Sharm Fugani;Northern outer reef;FNN;reef slope;25.87451;34.42072;0;1
+IDN-Bangka-FRF;EGY;El-Quseir;MB;Sharm Fugani;Reef flat walk;FRF;reef flat;25.87019;34.41887;0;1
+IDN-Bangka-FSE;EGY;El-Quseir;MB;Sharm Fugani;SE corner;FSE;reef slope;25.8661;34.42423;0;1
+IDN-Bangka-FSW;EGY;El-Quseir;MB;Sharm Fugani;Shallow lagoon Jetty West;FSW;reef flat;25.86992;34.41824;0;1
+IDN-Bangka-FSS;EGY;El-Quseir;MB;Sharm Fugani;Shallow seagrass;FSS;seagrass;25.8678;34.41629;0;1
+IDN-Bangka-FSR;EGY;El-Quseir;MB;Sharm Fugani;Silty reef;FSR;reef sediment;25.86866;34.41758;0;1
+IDN-Bangka-FBC;EGY;El-Quseir;MB;Sharm Fugani;"Silty reef, NE baby corner";FBC;reef sediment;25.86866;34.41758;0;1
+IDN-Bangka-FS2;EGY;El-Quseir;MB;Sharm Fugani;Southside - west;FS2;reef slope;25.86764;34.41949;0;1
+IDN-Bangka-FS1;EGY;El-Quseir;MB;Sharm Fugani;"Southside, shallow West";FS1;reef sediment;25.86705;34.41689;0;1
+IDN-Bangka-TBN;EGY;El-Quseir;MB;Sharm Tachtani;Bay - North side near exit;TBN;reef slope;25.8432;34.44004;0;1
+IDN-Bangka-TNN;EGY;El-Quseir;MB;Sharm Tachtani;North-North into bay;TNN;reef slope;25.84654;34.43989;0;1
+IDN-Bangka-TSM;EGY;El-Quseir;MB;Sharm Tachtani;Seagrass meadow;TSM;seagrass;25.84043;34.4366;0;1
+IDN-Bangka-TSS;EGY;El-Quseir;MB;Sharm Tachtani;South-South outside bay;TSS;reef slope;25.84007;34.4458;0;1
+IDN-Bangka-LBS;EGY;El-Quseir;MB;Torfa Lassal;Bay South Side;LBS;reef slope;25.94178;34.39185;0;1
+IDN-Bangka-LLN;EGY;El-Quseir;MB;Torfa Lassal;Discovery Labyrinth North;LLN;cave;25.94293;34.38917;0;1
+IDN-Bangka-LEL;EGY;El-Quseir;MB;Torfa Lassal;Erg Lassal;LEL;reef slope;25.95771;34.42649;0;1
+IDN-Bangka-LEM;EGY;El-Quseir;MB;Torfa Lassal;Erg Monika;LEM;reef slope;25.96262;34.40712;0;1
+IDN-Bangka-LNE;EGY;El-Quseir;MB;Torfa Lassal;NE Bay corner;LNE;reef slope;25.94369;34.39034;0;1
+IDN-Bangka-LJE;EGY;El-Quseir;MB;Torfa Lassal;Old jetty muck;LJE;sediment;25.94121;34.38866;0;1
+IDN-Bangka-LSE;EGY;El-Quseir;MB;Torfa Lassal;SE bay corner;LSE;reef slope;25.94184;34.3924;0;1
+IDN-Bangka-WCE;EGY;El-Quseir;MB;Wizr;Central Erg;WCE;reef sediment;25.78662;34.4898;0;1
+IDN-Bangka-WNE;EGY;El-Quseir;MB;Wizr;NE and Centre;WNE;reef slope;25.78583;34.48866;0;1
+IDN-Bangka-WSE;EGY;El-Quseir;MB;Wizr;SE corner;WSE;reef slope;25.78581;34.49157;0;1
+IDN-Bangka-AGS;EGY;Marsa Alam;MAlam;Fury Shoals;Abu Galawa Soghayr;AGS;reef slope;24.25167;35.54028;0;1
+IDN-Bangka-SDH;EGY;Marsa Alam;MAlam;Fury Shoals;Sataya Dolphin House South/East;SDH;reef slope;24.15638;35.71472;0;1
+IDN-Bangka-SCL;EGY;Marsa Alam;MAlam;Fury Shoals;Shaab Claudio;SCL;reef slope;24.21972;35.61195;0;1
+IDN-Bangka-AD1;EGY;Marsa Alam;MAlam;Marsa Alam;"Abu Dabab 1 (North, small)";AD1;reef slope;25.3463;34.7724;0;1
+IDN-Bangka-ELS;EGY;Marsa Alam;MAlam;Marsa Alam;Elphinstone - South;ELS;reef slope;25.30638;34.86222;0;1
+IDN-Bangka-MSH;EGY;Marsa Alam;MAlam;Marsa Alam;Marsa Shouna;MSH;reef slope;25.46945;34.68195;0;1
+IDN-Bangka-SMA;EGY;Marsa Alam;MAlam;Marsa Alam;Shaab Marsa Alam;SMA;reef slope;25.07362;34.93555;0;1
+IDN-Bangka-CUC;EGY;Marsa Alam;MAlam;St. John's;Caves - Umm Chararim;CUC;cave;23.63612;35.82583;0;1
+IDN-Bangka-GKE;EGY;Marsa Alam;MAlam;St. John's;Gota Kebir;GKE;reef slope;23.41083;35.93112;0;1
+IDN-Bangka-GSA;EGY;Marsa Alam;MAlam;St. John's;Gota Saraya (Soghayr);GSA;reef slope;23.42862;35.90362;0;1
+IDN-Bangka-PRE;EGY;Marsa Alam;MAlam;St. John's;Paradise Reef;PRE;reef slope;23.62305;35.82083;0;1
+IDN-Bangka-UAR;EGY;Marsa Alam;MAlam;St. John's;Umm Arouk;UAR;reef slope;23.39695;35.86472;0;1

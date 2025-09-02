@@ -50,6 +50,7 @@ class DataManager:
             'species': ('fish_df_raw', 'fish_df', ["Family", "Genus", "Species", "Species English"]),
             'divesites': ('divesites_df_raw', 'divesites_df', ["Area", "Site", "Site string", "latitude", "longitude"]),
         }
+        print(self.fish_df_raw.head())
         for key, (df_attr_raw, df_attr_loc, columns) in filter_map.items():
             df_raw = getattr(self, df_attr_raw)
             if self.location != '' and self.location in df_raw.columns:
