@@ -70,7 +70,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
           
       - name: Install dependencies
         run: |
@@ -81,14 +81,15 @@ jobs:
       - name: Install ccache
         run: |
           brew install ccache
-      
+
       - name: Build with Nuitka
         run: |
-          python -m nuitka --standalone --onefile --output-dir=distmipsnuitka --output-filename=daves-fish-renamer.app --macos-create-app-bundle --macos-app-icon=config/icon.png --include-data-dir="config=config" --enable-plugin=tk-inter --disable-ccache main.py
-      
+          python -m nuitka --standalone --macos-create-app-bundle --macos-app-icon=config/icon.png --enable-plugin=tk-inter --include-data-dir="config=config" --disable-ccache --output-dir=distmipsnuitka --remove-output --macos-app-name=FishRenamer --macos-app-version=0.2.3 --macos-signed-app-name=de.dave.FishRenamer --output-filename=daves-fish-renamer ./main.py
+
       - name: Zip macOS app
         run: |
           cd distmipsnuitka
+          mv main.app daves-fish-renamer.app
           tar -czf daves-fish-renamer.app.tar.gz daves-fish-renamer.app
           cd ..
       
