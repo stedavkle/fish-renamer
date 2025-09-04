@@ -81,27 +81,15 @@ jobs:
       - name: Install ccache
         run: |
           brew install ccache
-      
-      - name: Install Tcl/Tk version 8
-        run: |
-          brew install tcl-tk@8
-          echo "export PATH=\"/opt/homebrew/opt/tcl-tk/bin:\$PATH\"" >> $GITHUB_ENV
-          echo "export LDFLAGS=\"-L/opt/homebrew/opt/tcl-tk/lib\"" >> $GITHUB_ENV
-          echo "export CPPFLAGS=\"-I/opt/homebrew/opt/tcl-tk/include\"" >> $GITHUB_ENV
-          echo "export PKG_CONFIG_PATH=\"/opt/homebrew/opt/tcl-tk/lib/pkgconfig\"" >> $GITHUB_ENV
-          source $GITHUB_ENV
-          which tclsh
-          which wish
 
       - name: Build with Nuitka
         run: |
-          echo "Using Python from: $(which python)"
-          echo $(ls /opt/homebrew/opt/tcl-tk/lib)
-          python -m nuitka --standalone --macos-create-app-bundle --macos-app-icon=config/icon.png --enable-plugin=tk-inter --tcl-library-dir=/opt/homebrew/opt/tcl-tk@8/lib --include-data-dir=/opt/homebrew/opt/tcl-tk@8/lib/tcl8.6=tcl8.6 --include-data-dir=/opt/homebrew/opt/tcl-tk@8/lib/tk8.6=tk8.6 --include-data-dir="config=config" --disable-ccache --output-dir=dist/macos --remove-output --macos-app-name=FishRenamer --macos-app-version=% --macos-signed-app-name=de.dave.FishRenamer --output-filename=daves-fish-renamer.app ./main.py
+          python -m nuitka --standalone --macos-create-app-bundle --macos-app-icon=config/icon.png --enable-plugin=tk-inter --include-data-dir="config=config" --disable-ccache --output-dir=distmipsnuitka --remove-output --macos-app-name=FishRenamer --macos-app-version=0.2.3 --macos-signed-app-name=de.dave.FishRenamer --output-filename=daves-fish-renamer ./main.py
 
       - name: Zip macOS app
         run: |
           cd distmipsnuitka
+          mv main.app daves-fish-renamer.app
           tar -czf daves-fish-renamer.app.tar.gz daves-fish-renamer.app
           cd ..
       
