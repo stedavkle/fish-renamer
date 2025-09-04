@@ -1,4 +1,5 @@
 # data_manager.py
+import json
 import pandas as pd
 
 class DataManager:
@@ -12,6 +13,7 @@ class DataManager:
         self.users_df = pd.DataFrame()
         self.divesites_df = pd.DataFrame()
         self.activities_df = pd.DataFrame()
+        self.labels = {}
 
         self.family_default = '0-Fam'
         self.genus_default = 'genus'
@@ -25,14 +27,19 @@ class DataManager:
             'photographers': ('users_df', 'Loaded photographers'),
             'divesites': ('divesites_df_raw', 'Loaded divesites'),
             'activities': ('activities_df', 'Loaded activities'),
+            'labels': ('labels', 'Loaded labels'),
         }
         messages = []
-        for key, (df_attr, msg) in load_map.items():
+        for key, (attr, msg) in load_map.items():
             try:
                 path = self.config_manager.get_path(key)
                 if path.exists():
-                    df = pd.read_csv(path, sep=';').fillna('')
-                    setattr(self, df_attr, df)
+                    if key == 'labels':
+                        with open(path, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                    else:
+                        data = pd.read_csv(path, sep=';').fillna('')
+                    setattr(self, attr, data)
 
                     messages.append(f"{msg} from {path.name}")
                 else:
@@ -50,7 +57,6 @@ class DataManager:
             'species': ('fish_df_raw', 'fish_df', ["Family", "Genus", "Species", "Species English"]),
             'divesites': ('divesites_df_raw', 'divesites_df', ["Area", "Site", "Site string", "latitude", "longitude"]),
         }
-        print(self.fish_df_raw.head())
         for key, (df_attr_raw, df_attr_loc, columns) in filter_map.items():
             df_raw = getattr(self, df_attr_raw)
             if self.location != '' and self.location in df_raw.columns:
@@ -70,7 +76,10 @@ class DataManager:
         if not df.empty and column in df.columns:
             return sorted(df[column].unique())
         return []
-
+    
+    def get_active_labels(self, category):
+        return [v for k, v in self.labels.get(category, {}).items() if not k.startswith('_')]
+    
     def filter_fish(self, by_col, value):
         return self.fish_df[self.fish_df[by_col] == value]
     

@@ -35,7 +35,7 @@ class FilenameAssembler:
 
     def regex_match_identity(self, filename):
         # Family, Genus, species, confidence, phase, colour, behaviour, author, site, date, time, activity, original name
-        return re.match(r'(0?\-?[A-Za-z]*)_([A-Za-z]+)_([a-z]+)_[A-Z]_([a-z]{2})_([A-Za-z]+)_([A-Za-z\-]+)_([A-Za-z\-]+)_([A-Za-z]{5})_([A-Z]{3}-[A-Za-z]+-[A-Z0-9]{3})_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_([A-Za-z]+)_([A-Za-z0-9]+)', filename)
+        return re.match(r'(0?\-?[A-Za-z]*)_([A-Za-z]+)_([a-z]+)_[A-Z]_([a-z]{2})_([A-Za-z]+)_([A-Za-z\-]+)_([A-Za-z\-]+)_([A-Za-z]{5})_([A-Z]{3}-[A-Za-z]+-[A-Z0-9]{3})_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})_([A-Za-z]+)_(.*)', filename)
 
     def regex_match_datetime_filename(self, filename):
         return re.match(r'0?\-?[A-Za-z]*_[A-Za-z]+_[a-z]+_[A-Z]_[a-z]{2}_[A-Za-z]+_[A-Za-z\-]+_[A-Za-z\-]+_[A-Za-z]{5}_[A-Z]{3}-[A-Za-z]+-[A-Z0-9]{3}_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_[A-Za-z]+_([A-Za-z0-9]+)', filename)

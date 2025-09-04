@@ -76,6 +76,7 @@ class ConfigManager:
             'species': "Species_Indopacific 2025-04-15.csv",
             'photographers': "Photographers_all 2025-04-15.csv",
             'divesites': "Divesites_Indopacific 2025-04-15.csv",
-            'activities': "Activities.csv"
+            'activities': "Activities.csv",
+            'labels': "Labels 2025-04-15.json"
         }
         self.save()

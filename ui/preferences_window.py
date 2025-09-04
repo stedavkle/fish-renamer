@@ -49,7 +49,7 @@ class PreferencesWindow(tk.Toplevel):
         status_frame.pack(fill='x', expand=True, pady=5)
         
         self.file_status_labels = {}
-        files_to_track = ['Species', 'Photographers', 'Divesites', 'Activities']
+        files_to_track = ['Species', 'Photographers', 'Divesites', 'Labels', 'Activities']
         for i, name in enumerate(files_to_track):
             ttk.Label(status_frame, text=f"{name} CSV:").grid(row=i, column=0, sticky='w', padx=5)
             status_label = ttk.Label(status_frame, text="-", width=20, anchor='w')
@@ -79,6 +79,7 @@ class PreferencesWindow(tk.Toplevel):
             'Divesites': {'requires_date_check': True},
             'Species': {'requires_date_check': True},
             'Photographers': {'requires_date_check': True},
+            'Labels': {'requires_date_check': True},
         }
 
         # The updater works with plain paths, not tk variables.

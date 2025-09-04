@@ -176,6 +176,7 @@ class MainWindow(TkinterDnD.Tk):
     def on_data_updated(self):
         """Called to reload all data and refresh UI elements that depend on it."""
         status = self.data.load_all_data()
+        print(status)  # For debugging purposes
         self._notice(status)
         self.update_all_comboboxes()
         self.config_manager.save() # CHANGED
@@ -190,6 +191,11 @@ class MainWindow(TkinterDnD.Tk):
         
         self.cb_author['values'] = self.data.get_unique_values('Full name', 'users_df')
         self.cb_author.set(0)  # Default to empty string
+
+        self.cb_confidence['values'] = self.data.get_active_labels('Confidence')
+        self.cb_phase['values'] = self.data.get_active_labels('Phase')
+        self.cb_colour['values'] = self.data.get_active_labels('Colour')
+        self.cb_behaviour['values'] = self.data.get_active_labels('Behaviour')
         
         # CHANGED: Replace the old line with this one
         self.cb_site['values'] = self.data.get_formatted_site_list()
@@ -341,9 +347,11 @@ class MainWindow(TkinterDnD.Tk):
         if not self.tree.selection(): return
         item = self.tree.selection()[0]
         fam, gen, spec, _ = self.tree.item(item, 'values')
+        self._reset_info()
         self.cb_family.set(fam)
         self.cb_genus.set(gen)
         self.cb_species.set(spec)
+
 
     def fill_tree(self, items):
         self.clear_tree()

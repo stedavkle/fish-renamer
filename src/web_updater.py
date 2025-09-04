@@ -151,6 +151,8 @@ class WebUpdater:
         return sorted(list(locations))
 
     def run_update(self, file_list, configs):
+        print("file_list:", file_list)
+        print("configs:", configs)
         """The main update logic, refactored from the original class."""
         update_statuses = {}
         newest_files = {}
