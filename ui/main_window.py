@@ -425,8 +425,8 @@ class MainWindow(TkinterDnD.Tk):
             species = self.cb_species.get() if self.fields_to_edit[2] else info[2]
             confidence = self.cb_confidence.get() if self.fields_to_edit[3] else info[3]
             phase = self.cb_phase.get() if self.fields_to_edit[4] else info[4]
-            colour = self.assembler.COLOUR_DICT[self.cb_colour.get()] if self.fields_to_edit[5] else info[5]
-            behaviour = self.assembler.BEHAVIOUR_DICT[self.cb_behaviour.get()] if self.fields_to_edit[6] else info[6]
+            colour = self.data.get_abbreviation_reverse('Colour', self.cb_colour.get())
+            behaviour = self.data.get_abbreviation_reverse('Behaviour', self.cb_behaviour.get())
             author = self.cb_author.get()
             author_code = self.data.get_user_code(author) if self.fields_to_edit[7] else info[7]
             site = self.cb_site.get()
@@ -450,3 +450,4 @@ class MainWindow(TkinterDnD.Tk):
         self._notice(f"{renamed}/{len(self.editing_files)} files were renamed successfully.")
         self._reset_info()
         self.editing_files = []
+        self._toggle_checkboxes(False, False, False, False, False, False, False, False, False, False)

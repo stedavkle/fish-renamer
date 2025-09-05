@@ -14,6 +14,9 @@ class DataManager:
         self.divesites_df = pd.DataFrame()
         self.activities_df = pd.DataFrame()
         self.labels = {}
+        self.colour_reverse = {}
+        self.behaviour_reverse = {}
+
 
         self.family_default = '0-Fam'
         self.genus_default = 'genus'
@@ -65,7 +68,6 @@ class DataManager:
             else:
                 setattr(self, df_attr_loc, df_raw[columns])
             
-
     def get_all_fish(self):
         if self.fish_df.empty:
             return self.fish_df
@@ -77,8 +79,13 @@ class DataManager:
             return sorted(df[column].unique())
         return []
     
+    def get_abbreviation_reverse(self, category, label):
+        dict = self.labels.get(category, {})
+        reverse_dict = {v: k for k, v in dict.items()}
+        return reverse_dict.get(label, '')
+
     def get_active_labels(self, category):
-        return [v for k, v in self.labels.get(category, {}).items() if not k.startswith('_')]
+        return [v for k, v in self.labels.get(category, {}).items()]
     
     def filter_fish(self, by_col, value):
         return self.fish_df[self.fish_df[by_col] == value]
