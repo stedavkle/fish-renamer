@@ -175,6 +175,7 @@ class WebUpdater:
                 else:
                     update_statuses[prefix] = reason
                 newest_files[prefix] = cleaned_file_name
+                config['path_var'] = str(self.data_path / cleaned_file_name)
                 break
         return update_statuses, newest_files
 
