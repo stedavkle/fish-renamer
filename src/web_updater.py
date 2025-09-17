@@ -173,7 +173,13 @@ class WebUpdater:
                     update_statuses[prefix] = status
                 else:
                     update_statuses[prefix] = reason
+<<<<<<< HEAD
                 newest_files[prefix] = newest_file
+=======
+                newest_files[prefix] = cleaned_file_name
+                config['path_var'] = str(self.data_path / cleaned_file_name)
+                break
+>>>>>>> 4fd129299347f50ca3607568cf9ab0026f500181
         return update_statuses, newest_files
     
     def _get_newest_file(self, files):
