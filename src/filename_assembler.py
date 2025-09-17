@@ -7,10 +7,10 @@ class FilenameAssembler:
     """Contains all logic for validating and assembling new filenames."""
 
     # These could be moved to a constants file
-    COLOUR_DICT = {"typical colour": "ty", "aged": "aged", "banded": "band", "yellow": "yell"}
-    COLOUR_DICT_REVERSE = {v: k for k, v in COLOUR_DICT.items()}  # Reverse lookup for UI
-    BEHAVIOUR_DICT = {"not specified": "zz", "feeding": "feed", "hiding": "hide", "schooling": "school"}
-    BEHAVIOUR_DICT_REVERSE = {v: k for k, v in BEHAVIOUR_DICT.items()}  # Reverse lookup for UI
+    #COLOUR_DICT = {"typical colour": "ty", "aged": "aged", "banded": "band", "yellow": "yell"}
+    #COLOUR_DICT_REVERSE = {v: k for k, v in COLOUR_DICT.items()}  # Reverse lookup for UI
+    #BEHAVIOUR_DICT = {"not specified": "zz", "feeding": "feed", "hiding": "hide", "schooling": "school"}
+    #BEHAVIOUR_DICT_REVERSE = {v: k for k, v in BEHAVIOUR_DICT.items()}  # Reverse lookup for UI
 
     def __init__(self, data_manager):
         self.data = data_manager

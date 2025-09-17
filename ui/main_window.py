@@ -133,10 +133,10 @@ class MainWindow(TkinterDnD.Tk):
 
     def _setup_attribute_comboboxes(self):
         configs = [
-            {'label': 'Confidence', 'var': 'cb_confidence', 'values': ["ok", "cf"], 'row': 2, 'col': 0},
-            {'label': 'Phase', 'var': 'cb_phase', 'values': ["ad", "IP", "F", "M", "TP", "juv", "pair", "subad", "trans"], 'row': 2, 'col': 1},
-            {'label': 'Colour', 'var': 'cb_colour', 'values': list(self.assembler.COLOUR_DICT.keys()), 'row': 2, 'col': 2},
-            {'label': 'Behaviour', 'var': 'cb_behaviour', 'values': list(self.assembler.BEHAVIOUR_DICT.keys()), 'row': 2, 'col': 3}
+            {'label': 'Confidence', 'var': 'cb_confidence', 'values': self.data.confidence_default, 'row': 2, 'col': 0},
+            {'label': 'Phase', 'var': 'cb_phase', 'values': self.data.phase_default, 'row': 2, 'col': 1},
+            {'label': 'Colour', 'var': 'cb_colour', 'values': self.data.colour_default, 'row': 2, 'col': 2},
+            {'label': 'Behaviour', 'var': 'cb_behaviour', 'values': self.data.behaviour_default, 'row': 2, 'col': 3}
         ]
         self._setup_combobox_group(self.bottom_frame, configs)
 
@@ -312,6 +312,7 @@ class MainWindow(TkinterDnD.Tk):
         
         if is_edit: self.bt_rename.grid()
         else: self.bt_rename.grid_remove()
+        self._reset_info()
         self._notice(f"Switched to '{mode}' mode.")
     
     def _toggle_checkboxes(self, family, genus, species, confidence, phase, colour, behaviour, author, site, activity):
@@ -337,8 +338,8 @@ class MainWindow(TkinterDnD.Tk):
         if confidence: self.cb_confidence.set(confidence)
         if phase: self.cb_phase.set(phase)
         # reverse lookup
-        if colour: self.cb_colour.set(self.assembler.COLOUR_DICT_REVERSE.get(colour, "typical colour"))
-        if behaviour: self.cb_behaviour.set(self.assembler.BEHAVIOUR_DICT_REVERSE.get(behaviour, "not specified"))
+        if colour: self.cb_colour.set(colour)
+        if behaviour: self.cb_behaviour.set(behaviour)
         if author: self.cb_author.set(self.data.get_user_name(author))
         if site: self.cb_site.set(self.data.get_divesite_area_site(site))
         if activity: self.cb_activity.set(activity)
@@ -404,10 +405,11 @@ class MainWindow(TkinterDnD.Tk):
         self.cb_family.set(self.data.family_default)
         self.cb_genus.set(self.data.genus_default)
         self.cb_species.set(self.data.species_default)
-        self.cb_confidence.set("ok")
-        self.cb_phase.set("ad")
-        self.cb_colour.set("typical colour")
-        self.cb_behaviour.set("not specified")
+        self.cb_confidence.set(self.data.confidence_default)
+        self.cb_phase.set(self.data.phase_default)
+        self.cb_colour.set(self.data.colour_default)
+        self.cb_behaviour.set(self.data.behaviour_default)
+        self.search(None)
 
     def _edit_info(self, event=None):
         # Placeholder for the edit logic

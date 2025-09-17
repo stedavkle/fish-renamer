@@ -173,6 +173,8 @@ class WebUpdater:
                     update_statuses[prefix] = status
                 else:
                     update_statuses[prefix] = reason
+                newest_files[prefix] = newest_file
+        return update_statuses, newest_files
     
     def _get_newest_file(self, files):
         """Returns the file with the most recent date in its name."""

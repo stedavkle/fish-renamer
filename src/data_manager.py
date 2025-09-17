@@ -21,6 +21,10 @@ class DataManager:
         self.family_default = '0-Fam'
         self.genus_default = 'genus'
         self.species_default = 'spec'
+        self.confidence_default = 'ok'
+        self.phase_default = 'ad'
+        self.colour_default = 'ty'
+        self.behaviour_default = 'zz'
         self.location = self.config_manager.get_misc('location', '')
 
     def load_all_data(self):
