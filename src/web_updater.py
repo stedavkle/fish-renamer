@@ -156,27 +156,43 @@ class WebUpdater:
         """The main update logic, refactored from the original class."""
         update_statuses = {}
         newest_files = {}
-        for file in file_list:
-            cleaned_file_name = file.replace('%20', ' ')
-            
-            for prefix, config in configs.items():
-                if not cleaned_file_name.startswith(prefix):
-                    continue
-
-                old_filepath = None
+        for prefix, config in configs.items():
+            print(f"Processing {prefix}...")
+            print("config:", config)
+            prefix_files = [f.replace('%20', ' ') for f in file_list if f.startswith(prefix)]
+            print(f"Found {len(prefix_files)} files for prefix {prefix}: {prefix_files}")
+            newest_file = self._get_newest_file(prefix_files)
+            print(f"Newest file for {prefix}: {newest_file}")
+            if newest_file:
                 path_str = config['path_var']
-                if path_str: old_filepath = Path(path_str)
-
-                should_update, reason = self._check_if_update_needed(config, cleaned_file_name, old_filepath)
-                
+                old_filepath = Path(path_str) if path_str else None
+                should_update, reason = self._check_if_update_needed(config, newest_file, old_filepath)
+                print(f"Should update: {should_update}, Reason: {reason}")
                 if should_update:
-                    status = self._perform_download(file, cleaned_file_name, old_filepath)
+                    status = self._perform_download(newest_file, newest_file, old_filepath)
                     update_statuses[prefix] = status
                 else:
                     update_statuses[prefix] = reason
-                newest_files[prefix] = cleaned_file_name
-                break
+                newest_files[prefix] = newest_file
         return update_statuses, newest_files
+    
+    def _get_newest_file(self, files):
+        """Returns the file with the most recent date in its name."""
+        newest_file = None
+        newest_date = None
+        date_pattern = re.compile(r'(\d{4}-\d{2}-\d{2})')
+        
+        for file in files:
+            match = date_pattern.search(file)
+            if match:
+                file_date = match.group(1)
+                if not newest_date or file_date > newest_date:
+                    newest_date = file_date
+                    newest_file = file
+            else:
+                return file
+        
+        return newest_file
 
     def _check_if_update_needed(self, config, cleaned_file_name, old_filepath):
         print(f"Checking if update is needed for {old_filepath}")

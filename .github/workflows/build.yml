@@ -84,7 +84,7 @@ jobs:
 
       - name: Build with Nuitka
         run: |
-          python -m nuitka --standalone --macos-create-app-bundle --macos-app-icon=config/icon.png --enable-plugin=tk-inter --include-data-dir="config=config" --disable-ccache --output-dir=distmipsnuitka --remove-output --macos-app-name=FishRenamer --macos-app-version=0.2.3 --macos-signed-app-name=de.dave.FishRenamer --output-filename=daves-fish-renamer ./main.py
+          python -m nuitka --standalone --macos-create-app-bundle --macos-app-icon=config/icon.png --enable-plugin=tk-inter --include-data-dir="config=config" --disable-ccache --output-dir=distmipsnuitka --remove-output --macos-app-name=FishRenamer --macos-app-version=0.2.5 --macos-signed-app-name=de.dave.FishRenamer --output-filename=daves-fish-renamer ./main.py
 
       - name: Zip macOS app
         run: |

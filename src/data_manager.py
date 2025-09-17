@@ -85,7 +85,8 @@ class DataManager:
         return reverse_dict.get(label, '')
 
     def get_active_labels(self, category):
-        return [v for k, v in self.labels.get(category, {}).items()]
+        return list(self.labels.get(category, {}).keys())
+        #return [v for k, v in self.labels.get(category, {}).items()]
     
     def filter_fish(self, by_col, value):
         return self.fish_df[self.fish_df[by_col] == value]

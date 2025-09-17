@@ -64,8 +64,11 @@ class FilenameAssembler:
         if self.regex_match_identity(existing_filename) or not self.regex_match_basic(existing_filename):
             return None
 
-        colour_code = self.COLOUR_DICT.get(colour, "ty")
-        behaviour_code = self.BEHAVIOUR_DICT.get(behaviour, "zz")
+        #colour_code = self.COLOUR_DICT.get(colour, "ty")
+        #behaviour_code = self.BEHAVIOUR_DICT.get(behaviour, "zz")
+        colour_code = colour
+        behaviour_code = behaviour
+        
         base_name = base_name_match.group(1)
 
         if not all([family, genus, species, confidence, phase, colour_code, behaviour_code, base_name]):

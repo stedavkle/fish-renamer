@@ -3,6 +3,8 @@ import tkinter as tk
 from tkinter import ttk
 import threading
 import time
+from src.app_utils import clear_data_files, initialize_data_files
+
 
 class PreferencesWindow(tk.Toplevel):
     """The 'Preferences' dialog for managing CSV paths and web updates."""
@@ -44,6 +46,10 @@ class PreferencesWindow(tk.Toplevel):
         self.update_status_label = ttk.Label(update_frame, text="Status: Idle")
         self.update_status_label.grid(row=1, column=1, padx=5, pady=5, sticky='ew')
         
+        # Restore Defaults Button
+        restore_button = ttk.Button(update_frame, text="Restore Default Paths", command=self._restore_defaults)
+        restore_button.grid(row=2, column=0, padx=5, pady=5, sticky='ew')
+
         # Status display for individual files
         status_frame = ttk.LabelFrame(main_frame, text="File Update Status")
         status_frame.pack(fill='x', expand=True, pady=5)
@@ -70,6 +76,13 @@ class PreferencesWindow(tk.Toplevel):
         self.update_status_label.config(text=f"Status: {status_msg}")
 
         self._run_web_update()
+
+    def _restore_defaults(self):
+        clear_data_files()
+        initialize_data_files()
+        self.config_manager._set_defaults()
+        self.update_status_label.config(text="Status: Defaults restored.")
+        self.master.on_data_updated()
 
     def _run_web_update(self):
         # This configuration is passed to the web_updater.
