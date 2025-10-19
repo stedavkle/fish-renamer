@@ -117,7 +117,7 @@ class WebUpdater:
             callback("Waiting...")
             target_substring = "api/file/archive/download"
             request_wait = WebDriverWait(driver, 10, poll_frequency=0.05)
-            request_condition = network_request_is_made(target_substring)
+            request_condition = NetworkRequestWaiter(target_substring)
             request_wait.until(request_condition)
             download_url = request_condition.found_url
             callback(f"Found URL...")

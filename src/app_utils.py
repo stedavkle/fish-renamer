@@ -7,6 +7,45 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+def validate_safe_path(base_dir: Path, file_path: Path) -> bool:
+    """Ensure file_path is within base_dir to prevent path traversal attacks.
+
+    Args:
+        base_dir: The directory that should contain the file
+        file_path: The file path to validate (can be relative or absolute)
+
+    Returns:
+        bool: True if the path is safe (within base_dir), False otherwise
+
+    Example:
+        >>> validate_safe_path(Path("/data"), Path("file.csv"))  # Safe
+        True
+        >>> validate_safe_path(Path("/data"), Path("../../../etc/passwd"))  # Unsafe
+        False
+    """
+    try:
+        # Resolve both paths to absolute paths
+        base_dir_resolved = base_dir.resolve()
+
+        # If file_path is relative, resolve it relative to base_dir
+        if not file_path.is_absolute():
+            file_path_resolved = (base_dir / file_path).resolve()
+        else:
+            file_path_resolved = file_path.resolve()
+
+        # Check if the resolved file path is within the base directory
+        # In Python 3.9+, use is_relative_to()
+        # For compatibility with older Python, use this approach:
+        try:
+            file_path_resolved.relative_to(base_dir_resolved)
+            return True
+        except ValueError:
+            # Path is not relative to base_dir
+            return False
+    except (ValueError, OSError, RuntimeError) as e:
+        logger.warning(f"Path validation failed for {file_path}: {e}")
+        return False
+
 def get_app_path() -> Path:
     """Gets the application path (works for scripts and PyInstaller bundles)."""
     if getattr(sys, 'frozen', False):
@@ -46,8 +85,19 @@ def initialize_data_files():
         return
 
     for file_name in os.listdir(config_source_dir):
+        # Validate path to prevent path traversal attacks
+        if not validate_safe_path(config_source_dir, Path(file_name)):
+            logger.warning(f"Skipping potentially unsafe path: {file_name}")
+            continue
+
         source_path = config_source_dir / file_name
         dest_path = data_dir / file_name
+
+        # Also validate destination path
+        if not validate_safe_path(data_dir, Path(file_name)):
+            logger.warning(f"Skipping unsafe destination path: {file_name}")
+            continue
+
         if not dest_path.exists():
             logger.info(f"Initializing data file: {file_name}")
             shutil.copy(source_path, dest_path)

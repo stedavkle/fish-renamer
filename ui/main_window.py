@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, font as tkFont
 from tkinterdnd2 import DND_FILES, TkinterDnD
 import os
+import logging
 from PIL import Image, ImageTk
 
 # Import refactored components
@@ -21,6 +22,8 @@ from src.constants import (
     DEFAULT_SITE_TEXT,
     DEFAULT_ACTIVITY_TEXT
 )
+
+logger = logging.getLogger(__name__)
 
 class MainWindow(TkinterDnD.Tk):
     """The main application window, focused on UI management."""
@@ -362,6 +365,10 @@ class MainWindow(TkinterDnD.Tk):
             bool: True if file was renamed successfully, False otherwise
         """
         try:
+            from pathlib import Path
+            from src.app_utils import validate_safe_path
+            import shutil
+
             dir_name = os.path.dirname(file_path)
             original_name, ext = os.path.splitext(os.path.basename(file_path))
 
@@ -374,11 +381,38 @@ class MainWindow(TkinterDnD.Tk):
                 return False
 
             new_path = os.path.join(dir_name, new_filename_body + ext)
+
+            # Validate that new path is in the same directory (prevent path traversal)
+            if not validate_safe_path(Path(dir_name), Path(new_filename_body + ext)):
+                logger.warning(f"Rejecting unsafe rename path: {new_filename_body + ext}")
+                return False
+
             if os.path.exists(new_path):
                 return False
 
-            os.rename(file_path, new_path)
-            return True
+            # Create backup before renaming
+            backup_path = f"{file_path}.backup"
+            try:
+                # Copy file to backup
+                shutil.copy2(file_path, backup_path)
+
+                # Attempt rename
+                os.rename(file_path, new_path)
+
+                # Remove backup on success
+                os.remove(backup_path)
+                logger.debug(f"Successfully renamed: {os.path.basename(file_path)} -> {os.path.basename(new_path)}")
+                return True
+            except Exception as e:
+                # Restore from backup if rename failed
+                if os.path.exists(backup_path):
+                    if not os.path.exists(file_path):
+                        shutil.move(backup_path, file_path)
+                        logger.info(f"Restored from backup: {os.path.basename(file_path)}")
+                    else:
+                        os.remove(backup_path)
+                logger.error(f"Rename failed, restored backup: {e}")
+                raise
         except (OSError, IOError) as e:
             self._warn(f"Error renaming {os.path.basename(file_path)}: {e}")
             return False
@@ -391,6 +425,10 @@ class MainWindow(TkinterDnD.Tk):
             bool: True if file was renamed successfully, False otherwise
         """
         try:
+            from pathlib import Path
+            from src.app_utils import validate_safe_path
+            import shutil
+
             dir_name = os.path.dirname(file_path)
             original_name, ext = os.path.splitext(os.path.basename(file_path))
 
@@ -402,11 +440,38 @@ class MainWindow(TkinterDnD.Tk):
                 return False
 
             new_path = os.path.join(dir_name, new_filename_body + ext)
+
+            # Validate that new path is in the same directory (prevent path traversal)
+            if not validate_safe_path(Path(dir_name), Path(new_filename_body + ext)):
+                logger.warning(f"Rejecting unsafe rename path: {new_filename_body + ext}")
+                return False
+
             if os.path.exists(new_path):
                 return False
 
-            os.rename(file_path, new_path)
-            return True
+            # Create backup before renaming
+            backup_path = f"{file_path}.backup"
+            try:
+                # Copy file to backup
+                shutil.copy2(file_path, backup_path)
+
+                # Attempt rename
+                os.rename(file_path, new_path)
+
+                # Remove backup on success
+                os.remove(backup_path)
+                logger.debug(f"Successfully renamed: {os.path.basename(file_path)} -> {os.path.basename(new_path)}")
+                return True
+            except Exception as e:
+                # Restore from backup if rename failed
+                if os.path.exists(backup_path):
+                    if not os.path.exists(file_path):
+                        shutil.move(backup_path, file_path)
+                        logger.info(f"Restored from backup: {os.path.basename(file_path)}")
+                    else:
+                        os.remove(backup_path)
+                logger.error(f"Rename failed, restored backup: {e}")
+                raise
         except (OSError, IOError) as e:
             self._warn(f"Error renaming {os.path.basename(file_path)}: {e}")
             return False
@@ -705,14 +770,45 @@ class MainWindow(TkinterDnD.Tk):
                 extension
             )
 
-            new_filepath = os.path.join(os.path.dirname(file_path), new_filename)
+            from pathlib import Path
+            from src.app_utils import validate_safe_path
+            import shutil
+
+            dir_name = os.path.dirname(file_path)
+            new_filepath = os.path.join(dir_name, new_filename)
+
+            # Validate that new path is in the same directory (prevent path traversal)
+            if not validate_safe_path(Path(dir_name), Path(new_filename)):
+                logger.warning(f"Rejecting unsafe rename path: {new_filename}")
+                return False
 
             # Check if target exists
             if os.path.exists(new_filepath):
                 return False
 
-            os.rename(file_path, new_filepath)
-            return True
+            # Create backup before renaming
+            backup_path = f"{file_path}.backup"
+            try:
+                # Copy file to backup
+                shutil.copy2(file_path, backup_path)
+
+                # Attempt rename
+                os.rename(file_path, new_filepath)
+
+                # Remove backup on success
+                os.remove(backup_path)
+                logger.debug(f"Successfully edited: {os.path.basename(file_path)} -> {os.path.basename(new_filepath)}")
+                return True
+            except Exception as e:
+                # Restore from backup if rename failed
+                if os.path.exists(backup_path):
+                    if not os.path.exists(file_path):
+                        shutil.move(backup_path, file_path)
+                        logger.info(f"Restored from backup: {os.path.basename(file_path)}")
+                    else:
+                        os.remove(backup_path)
+                logger.error(f"Edit failed, restored backup: {e}")
+                raise
 
         except (OSError, IOError, AttributeError, IndexError) as e:
             self._warn(f"Error editing {os.path.basename(file_path)}: {e}")
