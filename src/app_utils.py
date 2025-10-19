@@ -2,7 +2,10 @@
 import os
 import sys
 import shutil
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 def get_app_path() -> Path:
     """Gets the application path (works for scripts and PyInstaller bundles)."""
@@ -24,23 +27,29 @@ def initialize_data_files():
     """Copies bundled default data files to the writable data directory if they don't exist."""
     data_dir = get_data_path()
 
+    # Create data directory if it doesn't exist
     if not data_dir.exists():
         data_dir.mkdir(parents=True, exist_ok=True)
-        print(f"Created data directory at {data_dir}")
-    elif any(data_dir.iterdir()):
-        print(f"Data directory {data_dir} already exists and is not empty. Skipping initialization.")
+        logger.info(f"Created data directory at {data_dir}")
+
+    # Check if data files already exist (look for CSV/JSON files, not just any files like logs)
+    data_extensions = {'.csv', '.json'}
+    existing_data_files = [f for f in data_dir.iterdir() if f.suffix.lower() in data_extensions]
+
+    if existing_data_files:
+        logger.info(f"Data directory already has {len(existing_data_files)} data files. Skipping initialization.")
         return
 
     config_source_dir = get_app_path().parent / 'config'
     if not config_source_dir.exists():
-        print(f"Warning: Config source directory not found at {config_source_dir}")
+        logger.warning(f"Config source directory not found at {config_source_dir}")
         return
 
     for file_name in os.listdir(config_source_dir):
         source_path = config_source_dir / file_name
         dest_path = data_dir / file_name
         if not dest_path.exists():
-            print(f"Initializing data file: {file_name}")
+            logger.info(f"Initializing data file: {file_name}")
             shutil.copy(source_path, dest_path)
 
 def clear_data_files():
@@ -49,6 +58,6 @@ def clear_data_files():
     if data_dir.exists() and data_dir.is_dir():
         for item in data_dir.iterdir():
             os.remove(item)
-        print(f"Cleared all data files in {data_dir}")
+        logger.info(f"Cleared all data files in {data_dir}")
     else:
-        print(f"Data directory {data_dir} does not exist or is not a directory.")
+        logger.warning(f"Data directory {data_dir} does not exist or is not a directory.")

@@ -1,17 +1,33 @@
 # ![icon](https://github.com/user-attachments/assets/09d4ebb3-550c-4d3a-94d0-a6e376b0bec1) Dave's Fish Renamer
+
 A specialized tool for renaming and organizing marine biodiversity images collected during field courses at the Eberhard-Karls Universität Tübingen.
+
 ## 🐠 About
+
 This program was developed during the "Marine Biodiversity: Indonesia" 2025 field course to streamline the process of integrating marine species images into the university's database. It automates the file renaming process according to specific formatting requirements, saving researchers time and ensuring consistency across the collection.
+
+The application features a clean, layered architecture with comprehensive error handling, professional logging, and type-safe code for reliability and maintainability.
 
 ![Main Interface](https://github.com/user-attachments/assets/592df31e-0e43-4930-9e88-b597153ddc58)
 
 ## ✨ Features
-- Three operational modes: Basic, Identify, and Edit
-- Batch renaming of multiple images
-- Integration with course-specific databases
-- User-friendly drag-and-drop interface
-- Intelligent filename validation
-- Support for various image formats
+
+### User Features
+- **Three operational modes**: Basic, Identify, and Edit
+- **Batch renaming** of multiple images via drag-and-drop
+- **Integration** with course-specific databases (species, dive sites, photographers, activities)
+- **User-friendly interface** with searchable species database
+- **Intelligent filename validation** and error handling
+- **Support for various image formats** with EXIF metadata extraction
+- **Persistent preferences** - remembers your photographer, site, and activity selections
+
+### Technical Features
+- **Layered architecture** separating UI, business logic, and data layers
+- **Comprehensive logging** for debugging and troubleshooting
+- **Type-safe code** with full type hints for better IDE support
+- **Robust error handling** with specific exception types
+- **Professional EXIF handling** using public APIs
+- **Centralized configuration** with no magic numbers or hardcoded values
 
 ## 🔧 Usage
 ### Renaming Modes
@@ -69,33 +85,125 @@ The application uses CSV files to populate dropdown menus and autocompletion fie
 5. Restart the application to ensure changes take effect
 
 ## 👨‍💻 Development
+
+### Getting Started
+
 1. Clone the repository:
 ```bash
 git clone https://github.com/stedavkle/fish-renamer.git
 cd fish-renamer
 ```
-2. Set up a virtual environment (optional but recommended):
+
+2. Set up a virtual environment (recommended):
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 ```
+
 3. Install required packages:
 ```bash
 pip install -r requirements.txt
 ```
-4. Run the script:
+
+4. Run the application:
 ```bash
-python daves-fish-renamer.py
+python main.py
 ```
 
+### Project Structure
+
+```
+fish-renamer/
+├── main.py                    # Application entry point
+├── src/
+│   ├── app_utils.py          # Utility functions (paths, data initialization)
+│   ├── config_manager.py     # Configuration and user preferences
+│   ├── constants.py          # Centralized constants and regex patterns
+│   ├── data_manager.py       # CSV/JSON data loading and querying
+│   ├── exif_handler.py       # EXIF metadata extraction
+│   ├── filename_assembler.py # Filename generation and validation
+│   ├── web_updater.py        # HiDrive data file updates
+│   └── services/
+│       └── renaming_service.py # Business logic for file renaming
+├── ui/
+│   ├── main_window.py        # Main application window
+│   └── preferences_window.py # Preferences dialog
+├── config/
+│   ├── default_data/         # Default CSV files
+│   └── icon.png             # Application icon
+└── README.md
+```
+
+### Code Quality
+
+The codebase follows Python best practices:
+- **PEP 8** compliant naming conventions
+- **Type hints** throughout for static analysis
+- **Comprehensive docstrings** in Google style
+- **Professional logging** instead of print statements
+- **No commented-out code** or magic numbers
+- **Separation of concerns** with clear layer boundaries
+
 ### 🏗️ Build Executables
-Build for x86/x64 (download [upx](https://upx.github.io/))
+
+#### Windows x86/x64
+
+Download [UPX](https://upx.github.io/) for compression, then build with Nuitka or PyInstaller:
+
+**Nuitka** (recommended for performance):
 ```bash
-python -m nuitka --standalone --onefile --output-dir=distx64nuitka --windows-icon-from-ico=config/icon.png --include-data-dir="config=config" --windows-console-mode=disable --plugin-enable=upx --upx-binary="upx-5.0.0-win64/upx.exe" --enable-plugin=tk-inter daves-fish-renamer.py
-pyinstaller --clean -y -F -n "Daves Fish Renamer" --distpath distx64 --icon=config/icon.png --add-data="config/icon.png;config" -w --optimize 2 --additional-hooks-dir=hooks --upx-dir=upx-5.0.0-win64 daves-fish-renamer.py
+python -m nuitka --standalone --onefile --output-dir=distx64nuitka \
+  --windows-icon-from-ico=config/icon.png \
+  --include-data-dir="config=config" \
+  --windows-console-mode=disable \
+  --plugin-enable=upx \
+  --upx-binary="upx-5.0.0-win64/upx.exe" \
+  --enable-plugin=tk-inter \
+  main.py
 ```
-Build for MacOS MIPS
+
+**PyInstaller**:
+```bash
+pyinstaller --clean -y -F -n "Daves Fish Renamer" \
+  --distpath distx64 \
+  --icon=config/icon.png \
+  --add-data="config/icon.png;config" \
+  -w --optimize 2 \
+  --additional-hooks-dir=hooks \
+  --upx-dir=upx-5.0.0-win64 \
+  main.py
 ```
-pyinstaller --clean -y -F -n "Daves Fish Renamer" --distpath distmips --icon=config/icon.png --add-data="config:config" -w --optimize 2 --additional-hooks-dir=hooks daves-fish-renamer.py
-python -m nuitka --standalone --onefile --output-dir=distmipsnuitka --macos-create-app-bundle --macos-app-icon=config/icon.png --include-data-dir="config=config" --enable-plugin=tk-inter daves-fish-renamer.py
+
+#### macOS (Apple Silicon)
+
+**PyInstaller**:
+```bash
+pyinstaller --clean -y -F -n "Daves Fish Renamer" \
+  --distpath distmips \
+  --icon=config/icon.png \
+  --add-data="config:config" \
+  -w --optimize 2 \
+  --additional-hooks-dir=hooks \
+  main.py
 ```
+
+**Nuitka**:
+```bash
+python -m nuitka --standalone --onefile --output-dir=distmipsnuitka \
+  --macos-create-app-bundle \
+  --macos-app-icon=config/icon.png \
+  --include-data-dir="config=config" \
+  --enable-plugin=tk-inter \
+  main.py
+```
+
+### 📝 Logging
+
+The application creates a log file at `~/.DavesFishRenamer/fish_renamer.log` for troubleshooting. The log captures:
+- Data loading and validation errors
+- File renaming operations
+- EXIF extraction issues
+- Configuration changes
+- Web update activities
+
+Log levels can be adjusted in `main.py` by changing the `logging.basicConfig()` level parameter.

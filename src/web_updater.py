@@ -5,22 +5,41 @@ import os
 from pathlib import Path
 import time
 import json
+import logging
 from urllib.parse import urlparse, parse_qs
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-class network_request_is_made(object):
+logger = logging.getLogger(__name__)
+
+
+class NetworkRequestWaiter:
+    """Custom WebDriverWait condition for detecting specific network requests.
+
+    This condition checks the browser's performance logs to see if a network
+    request containing a specific substring has been made.
     """
-    A custom WebDriverWait condition that checks the browser's performance logs
-    to see if a network request containing a specific substring has been made.
-    """
-    def __init__(self, url_substring):
+
+    def __init__(self, url_substring: str):
+        """Initialize the waiter.
+
+        Args:
+            url_substring: Substring to search for in request URLs
+        """
         self.url_substring = url_substring
         self.found_url = None
 
-    def __call__(self, driver):
+    def __call__(self, driver) -> bool:
+        """Check if the network request has been made.
+
+        Args:
+            driver: Selenium WebDriver instance
+
+        Returns:
+            True if request was found, False otherwise
+        """
         try:
             logs = driver.get_log("performance")
             for entry in logs:
@@ -112,11 +131,11 @@ class WebUpdater:
             callback(f"Error: {e}")
             if driver:
                 driver.save_screenshot("hidrive_error.png")
-                print("Saved a screenshot to 'hidrive_error.png' for debugging.")
+                logger.error("Saved a screenshot to 'hidrive_error.png' for debugging.")
         finally:
             if driver:
                 driver.quit()
-                print("Browser closed.")
+                logger.debug("Browser closed.")
         return access_token
     
     def connect(self, callback=None):
@@ -151,23 +170,24 @@ class WebUpdater:
         return sorted(list(locations))
 
     def run_update(self, file_list, configs):
-        print("file_list:", file_list)
-        print("configs:", configs)
         """The main update logic, refactored from the original class."""
+        logger.debug(f"Running update with {len(file_list)} files")
+        logger.debug(f"Configs: {list(configs.keys())}")
+
         update_statuses = {}
         newest_files = {}
         for prefix, config in configs.items():
-            print(f"Processing {prefix}...")
-            print("config:", config)
+            logger.info(f"Processing {prefix}...")
+            logger.debug(f"Config for {prefix}: {config}")
             prefix_files = [f.replace('%20', ' ') for f in file_list if f.startswith(prefix)]
-            print(f"Found {len(prefix_files)} files for prefix {prefix}: {prefix_files}")
+            logger.debug(f"Found {len(prefix_files)} files for prefix {prefix}")
             newest_file = self._get_newest_file(prefix_files)
-            print(f"Newest file for {prefix}: {newest_file}")
+            logger.info(f"Newest file for {prefix}: {newest_file}")
             if newest_file:
                 path_str = config['path_var']
                 old_filepath = Path(path_str) if path_str else None
                 should_update, reason = self._check_if_update_needed(config, newest_file, old_filepath)
-                print(f"Should update: {should_update}, Reason: {reason}")
+                logger.info(f"Update check for {prefix}: {should_update} ({reason})")
                 if should_update:
                     status = self._perform_download(newest_file, newest_file, old_filepath)
                     update_statuses[prefix] = status
@@ -195,30 +215,33 @@ class WebUpdater:
         return newest_file
 
     def _check_if_update_needed(self, config, cleaned_file_name, old_filepath):
-        print(f"Checking if update is needed for {old_filepath}")
+        """Check if a file needs to be updated."""
+        logger.debug(f"Checking if update is needed for {old_filepath}")
+
         if not config['requires_date_check']:
-            print(f"Skipping date check for {cleaned_file_name}")
+            logger.debug(f"Skipping date check for {cleaned_file_name}")
             return True, "Update required"
+
         new_date_match = re.search(r'(\d{4}-\d{2}-\d{2})', cleaned_file_name)
         if not new_date_match:
-            print(f"Malformed remote filename: {cleaned_file_name}")
+            logger.warning(f"Malformed remote filename: {cleaned_file_name}")
             return False, "Malformed remote filename"
         new_date_str = new_date_match.group(1)
 
         if not old_filepath or not old_filepath.exists():
-            print(f"No local file found for {cleaned_file_name}")
+            logger.info(f"No local file found for {cleaned_file_name}")
             return True, "No local file"
-        
+
         local_date_match = re.search(r'(\d{4}-\d{2}-\d{2})', old_filepath.name)
         if not local_date_match:
-            print(f"Malformed local file: {old_filepath.name}")
+            logger.warning(f"Malformed local file: {old_filepath.name}")
             return True, "Malformed local file"
-        
-        print(f"Comparing dates: {new_date_str} vs {local_date_match.group(1)}")
+
+        logger.debug(f"Comparing dates: {new_date_str} vs {local_date_match.group(1)}")
         if new_date_str > local_date_match.group(1):
-            print("Remote file is newer.")
+            logger.info("Remote file is newer.")
             return True, "Remote is newer"
-        
+
         return False, "up-to-date"
 
     def _perform_download(self, remote_file, cleaned_filename, old_filepath):
