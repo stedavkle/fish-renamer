@@ -2,6 +2,8 @@
 import requests
 import re
 import os
+import tempfile
+import shutil
 from pathlib import Path
 import time
 import json
@@ -77,7 +79,10 @@ class WebUpdater:
             str: The extracted access token, or None if not found.
         """
         access_token = None
-        
+
+        # Create a temp directory for any downloads (will be cleaned up)
+        temp_download_dir = tempfile.mkdtemp()
+
         # --- HYPER-OPTIMIZATIONS ---
         options = webdriver.ChromeOptions()
         # Essential for speed
@@ -95,7 +100,14 @@ class WebUpdater:
         options.add_argument("--blink-settings=imagesEnabled=false")
         options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
 
-        driver = None 
+        # Redirect downloads to temp directory to prevent .tmp files in app root
+        prefs = {
+            "download.default_directory": temp_download_dir,
+            "download.prompt_for_download": False,
+        }
+        options.add_experimental_option("prefs", prefs)
+
+        driver = None
         try:
             callback("Initializing...")
             driver = webdriver.Chrome(options=options)
@@ -136,6 +148,11 @@ class WebUpdater:
             if driver:
                 driver.quit()
                 logger.debug("Browser closed.")
+            # Clean up temp download directory
+            try:
+                shutil.rmtree(temp_download_dir)
+            except Exception as e:
+                logger.warning(f"Failed to clean up temp directory: {e}")
         return access_token
     
     def connect(self, callback=None):
