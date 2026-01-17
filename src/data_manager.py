@@ -149,17 +149,22 @@ class DataManager:
         """
         return list(self.labels.get(category, {}).values())
 
-    def filter_fish(self, by_col: str = '', value: str = '') -> pd.DataFrame:
-        """Filter fish DataFrame by column value.
+    def filter_fish(self, filters: dict[str, str] = None) -> pd.DataFrame:
+        """Filter fish DataFrame by multiple column values.
 
         Args:
-            by_col: Column name to filter by
-            value: Value to match
+            filters: Dictionary of {column_name: value} pairs to filter by
 
         Returns:
-            Filtered DataFrame
+            Filtered DataFrame matching all filter conditions
         """
-        return self.fish_df[self.fish_df[by_col] == value]
+        if not filters:
+            return self.fish_df
+
+        result = self.fish_df
+        for col, value in filters.items():
+            result = result[result[col] == value]
+        return result
 
     def search_fish(self, search_string: str) -> pd.DataFrame:
         """Search fish data by multiple keywords.

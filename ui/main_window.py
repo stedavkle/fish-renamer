@@ -729,9 +729,10 @@ class MainWindow(TkinterDnD.Tk):
         self.cb_species.set(spec)
         self.selection_confident(True)
 
-        filtered_df = self.data.filter_fish('Family', self.cb_family.get())
-        self.cb_genus['values'] = [self.data.genus_default] + sorted(filtered_df['Genus'].unique())
-        self.cb_species['values'] = [self.data.species_default] + sorted(filtered_df['Species'].unique())
+        fam_df = self.data.filter_fish({'Family': fam})
+        fam_gen_df = self.data.filter_fish({'Family': fam, 'Genus': gen})
+        self.cb_genus['values'] = [self.data.genus_default] + sorted(fam_df['Genus'].unique())
+        self.cb_species['values'] = [self.data.species_default] + sorted(fam_gen_df['Species'].unique())
 
 
     def fill_tree(self, items):
@@ -770,9 +771,9 @@ class MainWindow(TkinterDnD.Tk):
         """
         family = self.cb_family.get()
         if family == self.data.family_default:
-            filtered_df = self.data.fish_df
+            filtered_df = self.data.filter_fish()
         else:
-            filtered_df = self.data.filter_fish('Family', family)
+            filtered_df = self.data.filter_fish({'Family': family})
         self.cb_genus['values'] = [self.data.genus_default] + sorted(filtered_df['Genus'].unique())
         self.cb_genus.set(self.data.genus_default)
         self.cb_species['values'] = [self.data.species_default] + sorted(filtered_df['Species'].unique())
@@ -790,11 +791,15 @@ class MainWindow(TkinterDnD.Tk):
         Args:
             event: Tkinter event (can be None when called programmatically)
         """
+        family = self.cb_family.get()
         genus = self.cb_genus.get()
+        print(genus, self.data.genus_default)
         if genus == self.data.genus_default:
-            filtered_df = self.data.filter_fish('Family', self.cb_family.get())
+            filtered_df = self.data.filter_fish({'Family': family})
+            self.cb_genus['values'] = [self.data.genus_default] + sorted(filtered_df['Genus'].unique())
+            self.cb_genus.set(self.data.genus_default)
         else:
-            filtered_df = self.data.filter_fish('Genus', genus)
+            filtered_df = self.data.filter_fish({'Family': family, 'Genus': genus})
         self.cb_species['values'] = [self.data.species_default] + sorted(filtered_df['Species'].unique())
         self.cb_species.set(self.data.species_default)
         self.fill_tree(filtered_df.values.tolist())
@@ -810,11 +815,13 @@ class MainWindow(TkinterDnD.Tk):
         Args:
             event: Tkinter event (can be None when called programmatically)
         """
+        family = self.cb_family.get()
+        genus = self.cb_genus.get()
         species = self.cb_species.get()
         if species == self.data.species_default:
-            filtered_df = self.data.filter_fish('Genus', self.cb_genus.get())
+            filtered_df = self.data.filter_fish({'Family': family, 'Genus': genus})
         else:
-            filtered_df = self.data.filter_fish('Species', species)
+            filtered_df = self.data.filter_fish({'Family': family, 'Genus': genus, 'Species': species})
         self.fill_tree(filtered_df.values.tolist())
         self.selection_confident(species != self.data.species_default)
     
