@@ -128,7 +128,7 @@ class DataManager:
         reverse_dict = {v: k for k, v in category_dict.items()}
         return reverse_dict.get(label, '')
 
-    def get_active_labels(self, category: str) -> List[str]:
+    def get_active_label_abbrevs(self, category: str) -> List[str]:
         """Get list of active label keys for a category.
 
         Args:
@@ -138,6 +138,17 @@ class DataManager:
             List of label abbreviations
         """
         return list(self.labels.get(category, {}).keys())
+    
+    def get_active_labels(self, category: str) -> List[str]:
+        """Get list of active label keys for a category.
+
+        Args:
+            category: Category name (e.g., 'Confidence', 'Phase')
+
+        Returns:
+            List of label abbreviations
+        """
+        return list(self.labels.get(category, {}).values())
 
     def filter_fish(self, by_col: str, value: str) -> pd.DataFrame:
         """Filter fish DataFrame by column value.

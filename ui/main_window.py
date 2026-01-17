@@ -109,13 +109,13 @@ class MainWindow(TkinterDnD.Tk):
 
     def _setup_treeview_and_scrollbars(self):
         self.tree = ttk.Treeview(self.upper_frame, columns=self.tree_columns, show="headings")
-        vsb = ttk.Scrollbar(self.upper_frame, orient="vertical", command=self.tree.yview)
-        hsb = ttk.Scrollbar(self.upper_frame, orient="horizontal", command=self.tree.xview)
-        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        self.vsb = ttk.Scrollbar(self.upper_frame, orient="vertical", command=self.tree.yview)
+        self.hsb = ttk.Scrollbar(self.upper_frame, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=self.vsb.set, xscrollcommand=self.hsb.set)
         
         self.tree.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
-        hsb.grid(row=1, column=0, sticky="ew")
+        self.vsb.grid(row=0, column=1, sticky="ns")
+        self.hsb.grid(row=1, column=0, sticky="ew")
         
         self.upper_frame.grid_columnconfigure(0, weight=1)
         self.upper_frame.grid_rowconfigure(0, weight=1)
@@ -129,7 +129,7 @@ class MainWindow(TkinterDnD.Tk):
     def _setup_combobox_group(self, frame, configs):
         for config in configs:
             ttk.Label(frame, text=config['label']).grid(row=config['row'], column=config['col'], padx=5, pady=2, sticky='ew')
-            cb = ttk.Combobox(frame, values=config.get('values', []), state='readonly')
+            cb = ttk.Combobox(frame, values=config.get('values', []), state='readonly', height=15)
             cb.grid(row=config['row']+1, column=config['col'], padx=5, pady=2, sticky='ew')
             if cb['values']:
                 cb.current(0)
@@ -343,10 +343,10 @@ class MainWindow(TkinterDnD.Tk):
         family = self.cb_family.get()
         genus = self.cb_genus.get()
         species = self.cb_species.get()
-        confidence = self.cb_confidence.get()
-        phase = self.cb_phase.get()
-        colour = self.cb_colour.get()
-        behaviour = self.cb_behaviour.get()
+        confidence = self.data.get_abbreviation_reverse("Confidence", self.cb_confidence.get())
+        phase = self.data.get_abbreviation_reverse("Phase", self.cb_phase.get())
+        colour = self.data.get_abbreviation_reverse("Colour", self.cb_colour.get())
+        behaviour = self.data.get_abbreviation_reverse("Behaviour", self.cb_behaviour.get())
 
         renamed_count = 0
 
@@ -529,12 +529,15 @@ class MainWindow(TkinterDnD.Tk):
 
         if is_basic:
             self._toggle_checkboxes(False, False, False, False, False, False, False, True, True, True)
+            self._toggle_tree(False)
             self.bt_rename.grid_remove()
         elif is_identify:
             self._toggle_checkboxes(True, True, True, True, True, True, True, False, False, False)
+            self._toggle_tree(True)
             self.bt_rename.grid_remove()
         elif is_edit:
             self._toggle_checkboxes(False, False, False, False, False, False, False, False, False, False)
+            self._toggle_tree(True)
             self.bt_rename.grid()
 
         if is_edit: self.bt_rename.grid()
@@ -568,6 +571,26 @@ class MainWindow(TkinterDnD.Tk):
         self.cb_site.state(['!disabled'] if site else ['disabled'])
         self.cb_activity.state(['!disabled'] if activity else ['disabled'])
     
+    def _toggle_tree(self, visible):
+        if visible:
+            # self.vsb.grid()
+            # self.hsb.grid()
+            # self.search_field.grid()
+            # self.tree.grid()
+            self.tree.state(['!disabled'])
+            self.vsb.state(['!disabled'])
+            self.hsb.state(['!disabled'])
+            self.search_field.state(['!disabled'])
+        else:
+            # self.vsb.grid_remove()
+            # self.hsb.grid_remove()
+            # self.search_field.grid_remove()
+            # self.tree.grid_remove()
+            self.tree.state(['disabled'])
+            self.vsb.state(['disabled'])
+            self.hsb.state(['disabled'])
+            self.search_field.state(['disabled'])
+
     def _set_checkboxes(self, family, genus, species, confidence, phase, colour, behaviour, author, site, activity):
         """Set combobox values from parsed filename data.
 
