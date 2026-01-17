@@ -128,13 +128,15 @@ class MainWindow(TkinterDnD.Tk):
 
     def _setup_combobox_group(self, frame, configs):
         for config in configs:
-            ttk.Label(frame, text=config['label']).grid(row=config['row'], column=config['col'], padx=5, pady=2, sticky='ew')
+            lbl = ttk.Label(frame, text=config['label'])
+            lbl.grid(row=config['row'], column=config['col'], padx=5, pady=2, sticky='ew')
             cb = ttk.Combobox(frame, values=config.get('values', []), state='readonly', height=15)
             cb.grid(row=config['row']+1, column=config['col'], padx=5, pady=2, sticky='ew')
             if cb['values']:
                 cb.current(0)
             if 'cmd' in config: cb.bind("<<ComboboxSelected>>", config['cmd'])
             setattr(self, config['var'], cb)
+            setattr(self, config['var'] + '_label', lbl)  # Store label reference for show/hide
 
     def _setup_taxonomy_comboboxes(self):
         configs = [
@@ -357,6 +359,7 @@ class MainWindow(TkinterDnD.Tk):
                 renamed_count += 1
 
         self._notice(f"{renamed_count}/{len(files)} files renamed.")
+        self._reset_info()
 
     def _rename_single_file_basic(self, file_path, author, site_tuple, activity):
         """Rename a single file with basic metadata.
@@ -546,50 +549,63 @@ class MainWindow(TkinterDnD.Tk):
         self._notice(f"Switched to '{mode}' mode.")
     
     def _toggle_checkboxes(self, family, genus, species, confidence, phase, colour, behaviour, author, site, activity):
-        """Enable or disable comboboxes based on boolean flags.
+        """Show or hide comboboxes and their labels based on boolean flags.
 
         Args:
-            family: Enable/disable family combobox
-            genus: Enable/disable genus combobox
-            species: Enable/disable species combobox
-            confidence: Enable/disable confidence combobox
-            phase: Enable/disable phase combobox
-            colour: Enable/disable colour combobox
-            behaviour: Enable/disable behaviour combobox
-            author: Enable/disable author combobox
-            site: Enable/disable site combobox
-            activity: Enable/disable activity combobox
+            family: Show/hide family combobox
+            genus: Show/hide genus combobox
+            species: Show/hide species combobox
+            confidence: Show/hide confidence combobox
+            phase: Show/hide phase combobox
+            colour: Show/hide colour combobox
+            behaviour: Show/hide behaviour combobox
+            author: Show/hide author combobox
+            site: Show/hide site combobox
+            activity: Show/hide activity combobox
         """
-        self.cb_family.state(['!disabled'] if family else ['disabled'])
-        self.cb_genus.state(['!disabled'] if genus else ['disabled'])
-        self.cb_species.state(['!disabled'] if species else ['disabled'])
-        self.cb_confidence.state(['!disabled'] if confidence else ['disabled'])
-        self.cb_phase.state(['!disabled'] if phase else ['disabled'])
-        self.cb_colour.state(['!disabled'] if colour else ['disabled'])
-        self.cb_behaviour.state(['!disabled'] if behaviour else ['disabled'])
-        self.cb_author.state(['!disabled'] if author else ['disabled'])
-        self.cb_site.state(['!disabled'] if site else ['disabled'])
-        self.cb_activity.state(['!disabled'] if activity else ['disabled'])
+        self._toggle_widget(self.cb_family, self.cb_family_label, family)
+        self._toggle_widget(self.cb_genus, self.cb_genus_label, genus)
+        self._toggle_widget(self.cb_species, self.cb_species_label, species)
+        self._toggle_widget(self.cb_confidence, self.cb_confidence_label, confidence)
+        self._toggle_widget(self.cb_phase, self.cb_phase_label, phase)
+        self._toggle_widget(self.cb_colour, self.cb_colour_label, colour)
+        self._toggle_widget(self.cb_behaviour, self.cb_behaviour_label, behaviour)
+        self._toggle_widget(self.cb_author, self.cb_author_label, author)
+        self._toggle_widget(self.cb_site, self.cb_site_label, site)
+        self._toggle_widget(self.cb_activity, self.cb_activity_label, activity)
+        # Show/hide Google Maps link with site field
+        if site:
+            self.link.grid()
+        else:
+            self.link.grid_remove()
+
+    def _toggle_widget(self, widget, label, visible):
+        """Show or hide a widget and its associated label.
+
+        Args:
+            widget: The widget to show/hide
+            label: The label associated with the widget
+            visible: If True, show the widget; if False, hide it
+        """
+        if visible:
+            label.grid()
+            widget.grid()
+        else:
+            label.grid_remove()
+            widget.grid_remove()
     
     def _toggle_tree(self, visible):
+        """Show or hide the tree view, scrollbars, and search field.
+
+        Args:
+            visible: If True, show the tree components; if False, hide them
+        """
         if visible:
-            # self.vsb.grid()
-            # self.hsb.grid()
-            # self.search_field.grid()
-            # self.tree.grid()
-            self.tree.state(['!disabled'])
-            self.vsb.state(['!disabled'])
-            self.hsb.state(['!disabled'])
-            self.search_field.state(['!disabled'])
+            self.upper_frame.grid()
+            self.middle_frame.grid()
         else:
-            # self.vsb.grid_remove()
-            # self.hsb.grid_remove()
-            # self.search_field.grid_remove()
-            # self.tree.grid_remove()
-            self.tree.state(['disabled'])
-            self.vsb.state(['disabled'])
-            self.hsb.state(['disabled'])
-            self.search_field.state(['disabled'])
+            self.upper_frame.grid_remove()
+            self.middle_frame.grid_remove()
 
     def _set_checkboxes(self, family, genus, species, confidence, phase, colour, behaviour, author, site, activity):
         """Set combobox values from parsed filename data.
@@ -641,6 +657,7 @@ class MainWindow(TkinterDnD.Tk):
         self.cb_family.set(fam)
         self.cb_genus.set(gen)
         self.cb_species.set(spec)
+        self.selection_confident(True)
 
 
     def fill_tree(self, items):
@@ -679,11 +696,13 @@ class MainWindow(TkinterDnD.Tk):
         """
         family = self.cb_family.get()
         filtered_df = self.data.filter_fish('Family', family)
-        self.cb_genus['values'] = ['genus'] + sorted(filtered_df['Genus'].unique())
-        self.cb_genus.set('genus')
-        self.cb_species['values'] = ['spec'] + sorted(filtered_df['Species'].unique())
-        self.cb_species.set('spec')
+        self.cb_genus['values'] = [self.data.genus_default] + sorted(filtered_df['Genus'].unique())
+        self.cb_genus.set(self.data.genus_default)
+        self.cb_species['values'] = [self.data.species_default] + sorted(filtered_df['Species'].unique())
+        self.cb_species.set(self.data.species_default)
         self.fill_tree(filtered_df.values.tolist())
+
+        if family == self.data.family_default: self.selection_confident(False)
 
     def set_genus(self, event):
         """Filter species by selected genus and update species dropdown.
@@ -696,9 +715,11 @@ class MainWindow(TkinterDnD.Tk):
         """
         genus = self.cb_genus.get()
         filtered_df = self.data.filter_fish('Genus', genus)
-        self.cb_species['values'] = ['spec'] + sorted(filtered_df['Species'].unique())
-        self.cb_species.set('spec')
+        self.cb_species['values'] = [self.data.species_default] + sorted(filtered_df['Species'].unique())
+        self.cb_species.set(self.data.species_default)
         self.fill_tree(filtered_df.values.tolist())
+
+        if genus == self.data.genus_default: self.selection_confident(False)
 
     def set_species(self, event):
         """Filter and display only the selected species.
@@ -711,6 +732,13 @@ class MainWindow(TkinterDnD.Tk):
         """
         species = self.cb_species.get()
         self.fill_tree(self.data.filter_fish('Species', species).values.tolist())
+        self.selection_confident(species != self.data.species_default)
+    
+    def selection_confident(self, is_confident: bool):
+        if not is_confident:
+            self.cb_confidence.set(self.data.confidence_default)
+        else:
+            self.cb_confidence.set(self.data.get_active_labels('Confidence')[0])
         
     def sortby(self, tree, col, descending):
         """Sort treeview items by column.

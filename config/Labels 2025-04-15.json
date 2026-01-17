@@ -1,11 +1,10 @@
 {
     "Confidence": {
       "ok": "confident",
-      "cf": "uncertain",
-      "tst": "test"
+      "cf": "uncertain"
     },
     "Phase": {
-      "ad": "adult (default)",
+      "ad": "adult",
       "F": "female",
       "IP": "initial phase",
       "M": "male",

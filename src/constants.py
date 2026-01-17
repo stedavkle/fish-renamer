@@ -15,10 +15,10 @@ EXIF_TAG_DATETIME = 306  # DateTime - when file was modified
 DEFAULT_FAMILY = '0-Fam'
 DEFAULT_GENUS = 'genus'
 DEFAULT_SPECIES = 'spec'
-DEFAULT_CONFIDENCE = 'ok'
-DEFAULT_PHASE = 'ad'
-DEFAULT_COLOUR = 'ty'
-DEFAULT_BEHAVIOUR = 'zz'
+DEFAULT_CONFIDENCE = 'uncertain'
+DEFAULT_PHASE = 'adult'
+DEFAULT_COLOUR = 'typical colour'
+DEFAULT_BEHAVIOUR = 'not specified'
 
 # ==============================================================================
 # Tree Column Names
