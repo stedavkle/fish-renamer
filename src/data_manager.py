@@ -149,7 +149,7 @@ class DataManager:
         """
         return list(self.labels.get(category, {}).values())
 
-    def filter_fish(self, by_col: str, value: str) -> pd.DataFrame:
+    def filter_fish(self, by_col: str = '', value: str = '') -> pd.DataFrame:
         """Filter fish DataFrame by column value.
 
         Args:
