@@ -294,6 +294,8 @@ class MainWindow(TkinterDnD.Tk):
         # Map the 13-element array to the 10 UI controls
         ui_flags = is_same[[0, 1, 2, 3, 4, 5, 6, 7, 8, 11]]
         ui_values = values[[0, 1, 2, 3, 4, 5, 6, 7, 8, 11]]
+        for i, field in zip([3, 4, 5, 6], ['Confidence', 'Phase', 'Colour', 'Behaviour']):
+            ui_values[i] = self.data.labels[field][str(ui_values[i])]
 
         self._toggle_checkboxes(*ui_flags)
         self._set_checkboxes(*ui_values)
@@ -542,9 +544,7 @@ class MainWindow(TkinterDnD.Tk):
             self._toggle_checkboxes(False, False, False, False, False, False, False, False, False, False)
             self._toggle_tree(True)
             self.bt_rename.grid()
-
-        if is_edit: self.bt_rename.grid()
-        else: self.bt_rename.grid_remove()
+            
         self._reset_info()
         self._notice(f"Switched to '{mode}' mode.")
     
@@ -887,25 +887,28 @@ class MainWindow(TkinterDnD.Tk):
         fields['species'] = self.cb_species.get() if self.fields_to_edit[2] else info[2]
 
         # Attribute fields
-        fields['confidence'] = self.cb_confidence.get() if self.fields_to_edit[3] else info[3]
-        fields['phase'] = self.cb_phase.get() if self.fields_to_edit[4] else info[4]
+        fields['confidence'] = self.data.get_abbreviation_reverse('Confidence', self.cb_confidence.get()) if self.fields_to_edit[3] else info[3]
+        fields['phase'] = self.data.get_abbreviation_reverse('Phase', self.cb_phase.get()) if self.fields_to_edit[4] else info[4]
+        fields['colour'] = self.data.get_abbreviation_reverse('Colour', self.cb_colour.get()) if self.fields_to_edit[5] else info[5]
+        fields['behaviour'] = self.data.get_abbreviation_reverse('Behaviour', self.cb_behaviour.get()) if self.fields_to_edit[6] else info[6]
+        
 
-        # Colour and behaviour (may need reverse lookup for abbreviations)
-        if self.fields_to_edit[5]:
-            colour_value = self.cb_colour.get()
-            # Check if it's already an abbreviation or if we need to convert it
-            colour_abbrev = self.data.get_abbreviation_reverse('Colour', colour_value)
-            fields['colour'] = colour_abbrev if colour_abbrev else colour_value
-        else:
-            fields['colour'] = info[5]
+        # # Colour and behaviour (may need reverse lookup for abbreviations)
+        # if self.fields_to_edit[5]:
+        #     colour_value = self.cb_colour.get()
+        #     # Check if it's already an abbreviation or if we need to convert it
+        #     colour_abbrev = self.data.get_abbreviation_reverse('Colour', colour_value)
+        #     fields['colour'] = colour_abbrev if colour_abbrev else colour_value
+        # else:
+        #     fields['colour'] = info[5]
 
-        if self.fields_to_edit[6]:
-            behaviour_value = self.cb_behaviour.get()
-            # Check if it's already an abbreviation or if we need to convert it
-            behaviour_abbrev = self.data.get_abbreviation_reverse('Behaviour', behaviour_value)
-            fields['behaviour'] = behaviour_abbrev if behaviour_abbrev else behaviour_value
-        else:
-            fields['behaviour'] = info[6]
+        # if self.fields_to_edit[6]:
+        #     behaviour_value = self.cb_behaviour.get()
+        #     # Check if it's already an abbreviation or if we need to convert it
+        #     behaviour_abbrev = self.data.get_abbreviation_reverse('Behaviour', behaviour_value)
+        #     fields['behaviour'] = behaviour_abbrev if behaviour_abbrev else behaviour_value
+        # else:
+        #     fields['behaviour'] = info[6]
 
         # Author field
         if self.fields_to_edit[7]:
