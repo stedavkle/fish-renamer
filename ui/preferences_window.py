@@ -1,9 +1,12 @@
 # ui/preferences_window.py
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import threading
 import time
-from src.app_utils import clear_data_files, initialize_data_files
+import os
+import subprocess
+import sys
+from src.app_utils import clear_data_files, initialize_data_files, get_data_path
 
 
 class PreferencesWindow(tk.Toplevel):
@@ -14,7 +17,7 @@ class PreferencesWindow(tk.Toplevel):
         self.web_updater = web_updater
         self.transient(parent)
         self.title("Preferences & Updates")
-        self.geometry("500x300")
+        self.geometry("500x380")
         self.grab_set()
 
         self.remote_filelist = []
@@ -45,13 +48,9 @@ class PreferencesWindow(tk.Toplevel):
 
         fetch_button = ttk.Button(update_frame, text="Update", command=self._fetch_remote_files)
         fetch_button.grid(row=1, column=0, padx=5, pady=5, sticky='ew')
-        
+
         self.update_status_label = ttk.Label(update_frame, text="Status: Idle")
         self.update_status_label.grid(row=1, column=1, padx=5, pady=5, sticky='ew')
-        
-        # Restore Defaults Button
-        restore_button = ttk.Button(update_frame, text="Restore Default Paths", command=self._restore_defaults)
-        restore_button.grid(row=2, column=0, padx=5, pady=5, sticky='ew')
 
         # Status display for individual files
         status_frame = ttk.LabelFrame(main_frame, text="File Update Status")
@@ -64,6 +63,23 @@ class PreferencesWindow(tk.Toplevel):
             status_label = ttk.Label(status_frame, text="-", width=20, anchor='w')
             status_label.grid(row=i, column=1, sticky='w', padx=5)
             self.file_status_labels[name] = status_label
+
+        # Debug Section
+        debug_frame = ttk.LabelFrame(main_frame, text="Debug")
+        debug_frame.pack(fill='x', expand=True, pady=5)
+
+        open_dir_button = ttk.Button(debug_frame, text="Open App Directory", command=self._open_app_directory)
+        open_dir_button.grid(row=0, column=0, padx=5, pady=5, sticky='ew')
+
+        restore_button = ttk.Button(debug_frame, text="Restore Default Paths", command=self._restore_defaults)
+        restore_button.grid(row=0, column=1, padx=5, pady=5, sticky='ew')
+
+        reset_button = ttk.Button(debug_frame, text="Reset Directory", command=self._reset_directory)
+        reset_button.grid(row=0, column=2, padx=5, pady=5, sticky='ew')
+
+        debug_frame.grid_columnconfigure(0, weight=1)
+        debug_frame.grid_columnconfigure(1, weight=1)
+        debug_frame.grid_columnconfigure(2, weight=1)
 
     def _fetch_remote_files(self):
         self.update_status_label.config(text="Status: Fetching...")
@@ -86,6 +102,34 @@ class PreferencesWindow(tk.Toplevel):
         self.config_manager._set_defaults()
         self.update_status_label.config(text="Status: Defaults restored.")
         self.master.on_data_updated()
+
+    def _open_app_directory(self):
+        """Open the application data directory in the file explorer."""
+        data_path = get_data_path()
+        if sys.platform == 'win32':
+            os.startfile(data_path)
+        elif sys.platform == 'darwin':
+            subprocess.run(['open', data_path])
+        else:
+            subprocess.run(['xdg-open', data_path])
+
+    def _reset_directory(self):
+        """Delete all files in the application data directory after confirmation."""
+        if not messagebox.askyesno(
+            "Confirm Reset",
+            "This will delete all data files in the application directory.\n\nAre you sure?"
+        ):
+            return
+
+        data_path = get_data_path()
+        try:
+            for file in data_path.iterdir():
+                if file.is_file():
+                    file.unlink()
+            self.update_status_label.config(text="Status: Directory reset.")
+            self.master.on_data_updated()
+        except Exception as e:
+            self.update_status_label.config(text=f"Status: Error - {e}")
 
     def _run_web_update(self):
         # This configuration is passed to the web_updater.
