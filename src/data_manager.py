@@ -74,8 +74,7 @@ class DataManager:
         Args:
             location: Location name to filter by (e.g., 'Bangka', 'Red Sea')
         """
-        if location != '':
-            self.location = location
+        self.location = location
 
         filter_map = {
             'species': ('fish_df_raw', 'fish_df', ["Family", "Genus", "Species", "Species English"]),

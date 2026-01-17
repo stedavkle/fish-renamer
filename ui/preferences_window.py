@@ -29,9 +29,12 @@ class PreferencesWindow(tk.Toplevel):
         self.location_var = tk.StringVar()
         def on_location_change(event):
             self.config_manager.set_misc('location', self.location_var.get())
-            self.master.data.filter_by_location(event)
+            if event == "All":
+                self.master.data.filter_by_location()
+            else:
+                self.master.data.filter_by_location(event)
             self.master.update_all_comboboxes()
-        self.location_menu = ttk.OptionMenu(location_frame, self.location_var, "Select location", "Bangka", "Red Sea", command=on_location_change)
+        self.location_menu = ttk.OptionMenu(location_frame, self.location_var, "Select location", "All", "Bangka", "Red Sea", command=on_location_change)
         self.location_menu.grid(row=0, column=0, padx=5, pady=5, sticky='ew')
         self.location_var.set(self.config_manager.get_misc('location', ''))
 

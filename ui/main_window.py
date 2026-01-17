@@ -42,7 +42,13 @@ class MainWindow(TkinterDnD.Tk):
         # --- UI Setup ---
         self.tree_columns = TREE_COLUMNS
         self._setup_widgets()
-        
+
+        # Set fixed width (height can still change with modes)
+        self.update_idletasks()  # Ensure geometry is calculated
+        self.geometry(f"800x{self.winfo_reqheight()}")
+        self.minsize(800, 0)
+        self.maxsize(800, 2000)
+
         self.on_data_updated() # Initial data load and UI population
 
     def _setup_widgets(self):
@@ -50,6 +56,7 @@ class MainWindow(TkinterDnD.Tk):
         self._setup_icon()
         self._setup_dnd()
         self._configure_main_container_grid(self)
+        self._setup_mode_tabs()  # Add tabs at the very top
         self._create_frames(self)
         self._setup_menu()
         self._setup_search_field()
@@ -80,13 +87,75 @@ class MainWindow(TkinterDnD.Tk):
 
     def _configure_main_container_grid(self, container):
         container.grid_columnconfigure(0, weight=1)
-        container.grid_rowconfigure(0, weight=1)
+        container.grid_rowconfigure(1, weight=1)  # Row 1 is upper_frame (treeview)
+
+    def _setup_mode_tabs(self):
+        """Create 3 large colored tabs at the top for mode switching."""
+        self.mode = tk.StringVar(value="Basic")
+
+        self.tabs_frame = tk.Frame(self)
+        self.tabs_frame.grid(row=0, column=0, sticky='ew')
+
+        # Configure columns to expand equally
+        for col in range(3):
+            self.tabs_frame.grid_columnconfigure(col, weight=1)
+
+        # Define tab colors
+        self.tab_colors = {
+            'Basic': {'bg': '#4CAF50', 'active': '#66BB6A'},      # Green
+            'Identify': {'bg': '#2196F3', 'active': '#42A5F5'},   # Blue
+            'Edit': {'bg': '#FF9800', 'active': '#FFB74D'}        # Orange
+        }
+
+        self.tab_buttons = {}
+        for col, mode_name in enumerate(['Basic', 'Identify', 'Edit']):
+            btn = tk.Button(
+                self.tabs_frame,
+                text=mode_name,
+                font=('Arial', 14, 'bold'),
+                bg=self.tab_colors[mode_name]['bg'],
+                fg='white',
+                relief='flat',
+                pady=12,
+                command=lambda m=mode_name: self._select_mode_tab(m)
+            )
+            btn.grid(row=0, column=col, sticky='ew')
+            self.tab_buttons[mode_name] = btn
+
+        # Set initial active state
+        self._update_tab_appearance()
+
+    def _select_mode_tab(self, mode_name):
+        """Handle tab selection and update mode."""
+        self.mode.set(mode_name)
+        self._update_tab_appearance()
+        self._toggle_extended_info()
+        # Adjust window height to fit content
+        self.update_idletasks()
+        self.geometry(f"800x{self.winfo_reqheight()}")
+
+    def _update_tab_appearance(self):
+        """Update tab visual appearance based on current mode."""
+        current_mode = self.mode.get()
+        for mode_name, btn in self.tab_buttons.items():
+            if mode_name == current_mode:
+                btn.config(
+                    bg=self.tab_colors[mode_name]['bg'],
+                    fg='white',
+                    relief='sunken'
+                )
+            else:
+                btn.config(
+                    bg='#9E9E9E',  # Grey for inactive tabs
+                    fg='#EEEEEE',
+                    relief='flat'
+                )
 
     def _create_frames(self, main_container):
         frames = [
-            ('upper_frame', {'row': 0, 'column': 0, 'sticky': 'nsew'}),
-            ('middle_frame', {'row': 1, 'column': 0, 'sticky': 'nsew'}),
-            ('bottom_frame', {'row': 2, 'column': 0, 'sticky': 'nsew', 'padx': 10, 'pady': 10}),
+            ('upper_frame', {'row': 1, 'column': 0, 'sticky': 'nsew'}),
+            ('middle_frame', {'row': 2, 'column': 0, 'sticky': 'nsew'}),
+            ('bottom_frame', {'row': 3, 'column': 0, 'sticky': 'nsew', 'padx': 10, 'pady': 10}),
         ]
         for name, grid_args in frames:
             frame = ttk.Frame(main_container)
@@ -175,12 +244,8 @@ class MainWindow(TkinterDnD.Tk):
     def _setup_edit_frame(self):
         self.edit_frame = ttk.Frame(self.bottom_frame)
         self.edit_frame.grid(row=1, column=3, sticky="nsew")
-        self.mode = tk.StringVar(value="Basic")
-        om_mode = tk.OptionMenu(self.edit_frame, self.mode, "Basic", "Identify", "Edit", command=self._toggle_extended_info)
-        om_mode.grid(row=0, column=0, padx=5, pady=2, sticky='ew')
-        self.mode.set("Basic")
         self.bt_rename = tk.Button(self.edit_frame, text="Rename", command=self._edit_info)
-        self.bt_rename.grid(row=1, column=0, padx=5, pady=2, sticky='ew')
+        self.bt_rename.grid(row=0, column=0, padx=5, pady=2, sticky='ew')
         self.bt_rename.grid_remove()
 
     def _setup_status_text(self):
