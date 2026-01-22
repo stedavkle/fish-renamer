@@ -8,7 +8,7 @@ This program was developed during the "Marine Biodiversity: Indonesia" 2025 fiel
 
 The application features a clean, layered architecture with comprehensive error handling, professional logging, and type-safe code for reliability and maintainability.
 
-![Main Interface](https://github.com/user-attachments/assets/592df31e-0e43-4930-9e88-b597153ddc58)
+![Main Interface](https://github.com/user-attachments/assets/b3094f6a-cc85-44b8-8777-7df1da6d2a5a)
 
 *The interface features four mode tabs: Basic (green), Identify (blue), Edit (orange), and Meta (purple).*
 
