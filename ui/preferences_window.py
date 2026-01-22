@@ -32,6 +32,23 @@ class PreferencesWindow(tk.Toplevel):
         location_frame.pack(fill='x', expand=True, pady=5)
         self.location_var = tk.StringVar()
 
+        # UI Preferences Section
+        ui_frame = ttk.LabelFrame(main_frame, text="User Interface")
+        ui_frame.pack(fill='x', expand=True, pady=5)
+
+        # Enable Renaming Preview checkbox
+        self.enable_preview_var = tk.BooleanVar()
+        current_preview_setting = self.config_manager.get_misc('enable_renaming_preview', 'true')
+        self.enable_preview_var.set(current_preview_setting.lower() == 'true')
+
+        preview_cb = ttk.Checkbutton(
+            ui_frame,
+            text="Enable Renaming Preview",
+            variable=self.enable_preview_var,
+            command=self._on_preview_setting_change
+        )
+        preview_cb.grid(row=0, column=0, padx=5, pady=5, sticky='w')
+
         def on_location_change(event):
             self.config_manager.set_misc('location', self.location_var.get())
             if event == "All":
@@ -111,6 +128,11 @@ class PreferencesWindow(tk.Toplevel):
         debug_frame.grid_columnconfigure(0, weight=1)
         debug_frame.grid_columnconfigure(1, weight=1)
         debug_frame.grid_columnconfigure(2, weight=1)
+
+    def _on_preview_setting_change(self):
+        """Handle changes to the preview setting checkbox."""
+        value = 'true' if self.enable_preview_var.get() else 'false'
+        self.config_manager.set_misc('enable_renaming_preview', value)
 
     def _get_file_date(self, file_key):
         """Extract date from the current filename in config.

@@ -558,6 +558,15 @@ class MainWindow(TkinterDnD.Tk):
         self.prefs_win = PreferencesWindow(self, self.config_manager, self.web_updater)
         self.wait_window(self.prefs_win)
 
+    def _is_preview_enabled(self):
+        """Check if renaming preview is enabled in preferences.
+
+        Returns:
+            bool: True if preview is enabled (default), False otherwise
+        """
+        setting = self.config_manager.get_misc('enable_renaming_preview', 'true')
+        return setting.lower() == 'true'
+
     def _dnd_files(self, event):
         """Handle drag-and-drop events for renaming files.
 
@@ -691,15 +700,22 @@ class MainWindow(TkinterDnD.Tk):
         # Generate previews
         previews = self._generate_previews_basic(files, author, site_tuple, activity, camera_abbrev)
 
-        # Show preview dialog
-        from .preview_dialog import BatchPreviewDialog
-        dialog = BatchPreviewDialog(self, previews)
-        self.wait_window(dialog)
+        # Show preview dialog if enabled, otherwise proceed with all valid files
+        if self._is_preview_enabled():
+            from .preview_dialog import BatchPreviewDialog
+            dialog = BatchPreviewDialog(self, previews)
+            self.wait_window(dialog)
 
-        to_rename = dialog.get_files_to_rename()
-        if not to_rename:
-            self._notice("Rename cancelled")
-            return
+            to_rename = dialog.get_files_to_rename()
+            if not to_rename:
+                self._notice("Rename cancelled")
+                return
+        else:
+            # Skip errors automatically when preview is disabled
+            to_rename = [p for p in previews if not p.get('error')]
+            if not to_rename:
+                self._notice("No valid files to rename")
+                return
 
         # Clear history for new rename batch
         self.rename_history.clear()
@@ -772,15 +788,22 @@ class MainWindow(TkinterDnD.Tk):
             files, family, genus, species, confidence, phase, colour, behaviour
         )
 
-        # Show preview dialog
-        from .preview_dialog import BatchPreviewDialog
-        dialog = BatchPreviewDialog(self, previews)
-        self.wait_window(dialog)
+        # Show preview dialog if enabled, otherwise proceed with all valid files
+        if self._is_preview_enabled():
+            from .preview_dialog import BatchPreviewDialog
+            dialog = BatchPreviewDialog(self, previews)
+            self.wait_window(dialog)
 
-        to_rename = dialog.get_files_to_rename()
-        if not to_rename:
-            self._notice("Rename cancelled")
-            return
+            to_rename = dialog.get_files_to_rename()
+            if not to_rename:
+                self._notice("Rename cancelled")
+                return
+        else:
+            # Skip errors automatically when preview is disabled
+            to_rename = [p for p in previews if not p.get('error')]
+            if not to_rename:
+                self._notice("No valid files to rename")
+                return
 
         # Clear history for new rename batch
         self.rename_history.clear()
@@ -848,15 +871,22 @@ class MainWindow(TkinterDnD.Tk):
         # Generate previews by extracting site from each filename
         previews = self._generate_previews_exif(files)
 
-        # Show preview dialog
-        from .exif_preview_dialog import ExifPreviewDialog
-        dialog = ExifPreviewDialog(self, previews)
-        self.wait_window(dialog)
+        # Show preview dialog if enabled, otherwise proceed with all valid files
+        if self._is_preview_enabled():
+            from .exif_preview_dialog import ExifPreviewDialog
+            dialog = ExifPreviewDialog(self, previews)
+            self.wait_window(dialog)
 
-        to_process = dialog.get_files_to_process()
-        if not to_process:
-            self._notice("GPS writing cancelled")
-            return
+            to_process = dialog.get_files_to_process()
+            if not to_process:
+                self._notice("GPS writing cancelled")
+                return
+        else:
+            # Skip errors automatically when preview is disabled
+            to_process = [p for p in previews if not p.get('error')]
+            if not to_process:
+                self._notice("No valid files to process")
+                return
 
         # Write GPS to files and rename them
         success_count = 0
@@ -1535,15 +1565,22 @@ class MainWindow(TkinterDnD.Tk):
         # Generate previews
         previews = self._generate_previews_edit(self.editing_files)
 
-        # Show preview dialog
-        from .preview_dialog import BatchPreviewDialog
-        dialog = BatchPreviewDialog(self, previews)
-        self.wait_window(dialog)
+        # Show preview dialog if enabled, otherwise proceed with all valid files
+        if self._is_preview_enabled():
+            from .preview_dialog import BatchPreviewDialog
+            dialog = BatchPreviewDialog(self, previews)
+            self.wait_window(dialog)
 
-        to_rename = dialog.get_files_to_rename()
-        if not to_rename:
-            self._notice("Rename cancelled")
-            return
+            to_rename = dialog.get_files_to_rename()
+            if not to_rename:
+                self._notice("Rename cancelled")
+                return
+        else:
+            # Skip errors automatically when preview is disabled
+            to_rename = [p for p in previews if not p.get('error')]
+            if not to_rename:
+                self._notice("No valid files to rename")
+                return
 
         # Clear history for new rename batch
         self.rename_history.clear()
@@ -1603,21 +1640,25 @@ class MainWindow(TkinterDnD.Tk):
                     edited_fields['date'],
                     edited_fields['time'],
                     edited_fields['activity'],
+                    edited_fields['camera'],
                     edited_fields['filename'],
                     extension
                 )
 
             elif self.editing_format == 'basic':
-                # Parse Basic format filename
-                parts = basename.split('_')
-                if len(parts) < 6:
+                # Parse Basic format filename: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
+                # Remove _G suffix if present
+                clean_basename = basename[:-2] if basename.endswith('_G') else basename
+                parts = clean_basename.split('_')
+                if len(parts) < 7:
                     preview['error'] = 'Invalid format'
                     previews.append(preview)
                     continue
 
-                # Create info tuple matching Identity format structure
+                # Create info tuple matching Identity format structure (14 elements)
+                # [0-6: taxonomy (None), 7: author, 8: site, 9: date, 10: time, 11: activity, 12: camera, 13: original]
                 info = (None, None, None, None, None, None, None,
-                       parts[0], parts[1], parts[2], parts[3], parts[4], '_'.join(parts[5:]))
+                       parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], '_'.join(parts[6:]))
 
                 # Build new filename from edited/original fields
                 edited_fields = self._collect_edited_fields(info)
@@ -1628,6 +1669,7 @@ class MainWindow(TkinterDnD.Tk):
                     edited_fields['date'],
                     edited_fields['time'],
                     edited_fields['activity'],
+                    edited_fields['camera'],
                     edited_fields['filename'],
                     extension
                 )

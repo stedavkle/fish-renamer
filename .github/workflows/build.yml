@@ -109,7 +109,7 @@ jobs:
       # 2. Use the environment variable in the Nuitka command
       - name: Build with Nuitka
         run: |
-          python -m nuitka --onefile --macos-create-app-bundle --macos-app-icon=config/icon.png --enable-plugin=tk-inter --include-data-dir="config=config" --disable-ccache --output-dir=distmipsnuitka --remove-output --macos-app-name=FishRenamer --macos-app-version=${{ env.APP_VERSION }} --macos-signed-app-name=de.dave.FishRenamer --output-filename=daves-fish-renamer ./main.py
+          python -m nuitka --standalone --macos-create-app-bundle --macos-app-icon=config/icon.png --enable-plugin=tk-inter --include-data-dir="config=config" --disable-ccache --output-dir=distmipsnuitka --remove-output --macos-app-name=FishRenamer --macos-app-version=${{ env.APP_VERSION }} --macos-signed-app-name=de.dave.FishRenamer --output-filename=daves-fish-renamer ./main.py
 
       - name: Zip macOS app
         run: |
