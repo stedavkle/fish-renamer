@@ -59,6 +59,60 @@ class FilenameAssembler:
             logger.error(f"Error analyzing files for editing: {e}")
             raise ValueError(f"Failed to analyze filenames: {e}")
 
+    def analyze_basic_files_for_editing(self, filenames: List[str]) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Parses a list of Basic format filenames to find which metadata fields are identical.
+
+        Args:
+            filenames: List of Basic format filenames to analyze
+
+        Returns:
+            Tuple of (is_same_flags, common_values) as numpy arrays with 13 elements
+            to match the Identity format structure (first 7 are None/False for taxonomy)
+
+        Raises:
+            ValueError: If filenames don't match basic pattern
+        """
+        if not filenames:
+            raise ValueError("No filenames provided for analysis")
+
+        parsed_info = []
+        for filename in filenames:
+            basename = os.path.basename(os.path.splitext(filename)[0])
+
+            # Parse Basic format: AuthorCode_SiteString_Date_Time_Activity_OriginalName
+            parts = basename.split('_')
+            if len(parts) < 6:
+                raise ValueError(f"Invalid basic format: '{basename}'")
+
+            author_code = parts[0]
+            site_string = parts[1]
+            date = parts[2]
+            time = parts[3]
+            activity = parts[4]
+            original_name = '_'.join(parts[5:])  # Rest is original name
+
+            # Create tuple matching Identity format structure (13 elements)
+            # [0-6: taxonomy (None), 7: author, 8: site, 9: date, 10: time, 11: activity, 12: original]
+            parsed = (None, None, None, None, None, None, None,
+                     author_code, site_string, date, time, activity, original_name)
+            parsed_info.append(parsed)
+
+        try:
+            info = np.array(parsed_info, dtype=object)
+            is_same = np.array([False] * 13, dtype=bool)
+
+            # Check which fields are the same across all files (skip taxonomy fields 0-6)
+            for i in range(7, 13):
+                if all(info[j][i] == info[0][i] for j in range(len(info))):
+                    is_same[i] = True
+
+            values = np.array([info[0][i] if is_same[i] else None for i in range(13)], dtype=object)
+            return is_same, values
+        except (IndexError, ValueError) as e:
+            logger.error(f"Error analyzing basic files for editing: {e}")
+            raise ValueError(f"Failed to analyze basic filenames: {e}")
+
     def regex_match_basic(self, filename):
         """Match basic filename pattern."""
         return PATTERN_BASIC_FILENAME.match(filename)
@@ -179,3 +233,48 @@ class FilenameAssembler:
         """
 
         return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{author_code}_{site_string}_{date}_{time}_{activity}_{filename}{extension}"
+
+    def assemble_edited_basic_filename(self, author_code: str, site_string: str, date: str, time: str, activity: str, filename: str, extension: str) -> str:
+        """
+        Constructs a new Basic format filename by replacing edited fields and keeping original ones.
+
+        Args:
+            author_code: Author code (5 letters)
+            site_string: Site string (e.g., IDN-Bangka-PA1)
+            date: Date string (YYYY-MM-DD)
+            time: Time string (HH-MM-SS)
+            activity: Activity type
+            filename: Original filename part
+            extension: File extension
+
+        Returns:
+            Complete filename with extension
+        """
+        return f"{author_code}_{site_string}_{date}_{time}_{activity}_{filename}{extension}"
+
+    def extract_site_string(self, filename: str) -> Optional[str]:
+        """Extract site string from Basic or Identify format filename.
+
+        Args:
+            filename: Filename without extension
+
+        Returns:
+            Site string (e.g., 'IDN-Bangka-BTI') or None if not found
+        """
+        # Try Identity format first (more specific)
+        match = PATTERN_IDENTITY_FILENAME.match(filename)
+        if match:
+            return match.group(9)  # Site string is group 9
+
+        # Try Basic format
+        match = PATTERN_BASIC_FILENAME.match(filename)
+        if match:
+            # Basic format: AuthorCode_SiteString_Date_Time_Activity_OriginalName
+            parts = filename.split('_')
+            if len(parts) >= 2:
+                potential_site = parts[1]
+                # Validate site string format: XXX-Name-XXX
+                if re.match(r'^[A-Z]{3}-[A-Za-z]+-[A-Z0-9]{3}$', potential_site):
+                    return potential_site
+
+        return None

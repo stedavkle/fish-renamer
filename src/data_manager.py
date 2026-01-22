@@ -68,6 +68,20 @@ class DataManager:
         self.filter_by_location()
         return "\n".join(messages)
 
+    def get_available_locations(self) -> List[str]:
+        """Get list of available location columns from species data.
+
+        Returns:
+            List of location names from CSV columns (e.g., ['Bangka', 'Red Sea', 'All'])
+        """
+        standard_columns = {'Family', 'Genus', 'Species', 'Species English'}
+
+        if self.fish_df_raw.empty:
+            return []
+
+        locations = [col for col in self.fish_df_raw.columns if col not in standard_columns]
+        return locations
+
     def filter_by_location(self, location: str = '') -> None:
         """Filter species and divesites data by location.
 

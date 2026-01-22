@@ -5,12 +5,14 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 import os
 import logging
 from PIL import Image, ImageTk
+from tktooltip import ToolTip
 
 # Import refactored components
 from src.config_manager import ConfigManager
 from src.data_manager import DataManager
 from src.filename_assembler import FilenameAssembler
 from src.exif_handler import ExifHandler
+from src.exiftool_handler import ExifToolHandler
 from src.web_updater import WebUpdater
 from .preferences_window import PreferencesWindow
 from src import app_utils
@@ -20,7 +22,9 @@ from src.constants import (
     STATUS_READY,
     DEFAULT_PHOTOGRAPHER_TEXT,
     DEFAULT_SITE_TEXT,
-    DEFAULT_ACTIVITY_TEXT
+    DEFAULT_ACTIVITY_TEXT,
+    SEARCH_PLACEHOLDER,
+    IMAGE_FILE_EXTENSIONS
 )
 
 logger = logging.getLogger(__name__)
@@ -37,7 +41,16 @@ class MainWindow(TkinterDnD.Tk):
         self.data = DataManager(self.config_manager)
         self.assembler = FilenameAssembler(self.data)
         self.exif = ExifHandler()
+        self.exiftool = ExifToolHandler()
         self.web_updater = WebUpdater(app_utils.get_data_path())
+
+        # Undo history for rename operations
+        self.rename_history = []  # List of (old_path, new_path) tuples
+
+        # Edit mode tracking
+        self.editing_files = []
+        self.editing_format = None  # 'basic' or 'identity'
+        self.fields_to_edit = None
 
         # --- UI Setup ---
         self.tree_columns = TREE_COLUMNS
@@ -68,6 +81,8 @@ class MainWindow(TkinterDnD.Tk):
         self._setup_maps_link() # Assuming _open_googlemaps is also implemented
         self._setup_status_text()
         self._build_tree_headers()
+        self._setup_tooltips()
+        self._setup_exif_frame()  # EXIF mode UI
         self._toggle_extended_info()  # Set initial mode to Basic
 
     def _setup_icon(self):
@@ -84,34 +99,58 @@ class MainWindow(TkinterDnD.Tk):
     def _setup_dnd(self):
         self.drop_target_register(DND_FILES)
         self.dnd_bind('<<Drop>>', self._dnd_files)
+        self.dnd_bind('<<DragEnter>>', self._on_drag_enter)
+        self.dnd_bind('<<DragLeave>>', self._on_drag_leave)
+        self._drop_highlight_color = '#e3f2fd'  # Light blue
+        self._default_bg = 'SystemButtonFace'
+
+    def _on_drag_enter(self, event):
+        """Highlight window when files are dragged over it."""
+        self.config(bg=self._drop_highlight_color)
+        self._notice("Drop files here to rename...")
+
+    def _on_drag_leave(self, event):
+        """Reset window background when files are dragged away."""
+        self.config(bg=self._default_bg)
+        # Restore mode hint
+        mode_hints = {
+            'Basic': "Drop files to add photographer, site, and activity info",
+            'Identify': "Search or select a species, then drop files to identify",
+            'Edit': "Drop files to batch edit their metadata",
+            'Meta': "Drop Basic/Identify format files to auto-extract GPS from filename"
+        }
+        self._notice(mode_hints[self.mode.get()])
 
     def _configure_main_container_grid(self, container):
         container.grid_columnconfigure(0, weight=1)
-        container.grid_rowconfigure(1, weight=1)  # Row 1 is upper_frame (treeview)
+        container.grid_rowconfigure(2, weight=1)  # Row 2 is upper_frame (treeview)
 
     def _setup_mode_tabs(self):
-        """Create 3 large colored tabs at the top for mode switching."""
+        """Create 4 large colored tabs at the top for mode switching."""
         self.mode = tk.StringVar(value="Basic")
 
         self.tabs_frame = tk.Frame(self)
         self.tabs_frame.grid(row=0, column=0, sticky='ew')
 
         # Configure columns to expand equally
-        for col in range(3):
+        for col in range(4):
             self.tabs_frame.grid_columnconfigure(col, weight=1)
 
         # Define tab colors
         self.tab_colors = {
             'Basic': {'bg': '#4CAF50', 'active': '#66BB6A'},      # Green
             'Identify': {'bg': '#2196F3', 'active': '#42A5F5'},   # Blue
-            'Edit': {'bg': '#FF9800', 'active': '#FFB74D'}        # Orange
+            'Edit': {'bg': '#FF9800', 'active': '#FFB74D'},       # Orange
+            'Meta': {'bg': '#9C27B0', 'active': '#AB47BC'}        # Purple
         }
 
         self.tab_buttons = {}
-        for col, mode_name in enumerate(['Basic', 'Identify', 'Edit']):
+        for col, mode_name in enumerate(['Basic', 'Identify', 'Edit', 'Meta']):
+            # Add "(Beta)" suffix for EXIF tab display
+            display_name = "Meta (Beta)" if mode_name == 'Meta' else mode_name
             btn = tk.Button(
                 self.tabs_frame,
-                text=mode_name,
+                text=display_name,
                 font=('Arial', 14, 'bold'),
                 bg=self.tab_colors[mode_name]['bg'],
                 fg='white',
@@ -125,14 +164,71 @@ class MainWindow(TkinterDnD.Tk):
         # Set initial active state
         self._update_tab_appearance()
 
+        # Status bar below tabs
+        self.status_frame = tk.Frame(self, bg='#f0f0f0', pady=5)
+        self.status_frame.grid(row=1, column=0, sticky='ew')
+        self.status_label = tk.Label(
+            self.status_frame,
+            text="",
+            font=('Arial', 10),
+            bg='#f0f0f0',
+            fg='#333333',
+            anchor='w',
+            padx=10
+        )
+        self.status_label.pack(fill='x')
+
     def _select_mode_tab(self, mode_name):
         """Handle tab selection and update mode."""
         self.mode.set(mode_name)
         self._update_tab_appearance()
         self._toggle_extended_info()
-        # Adjust window height to fit content
+        self._adjust_window_height()
+
+    def _adjust_window_height(self):
+        """Adjust window height to fit all visible content without compressing the tree."""
         self.update_idletasks()
-        self.geometry(f"800x{self.winfo_reqheight()}")
+
+        # Determine if tree should be visible based on mode (not winfo_viewable which can lag)
+        mode = self.mode.get()
+        tree_visible = mode in ('Identify', 'Edit')
+        exif_panel_visible = mode == 'Meta'
+
+        # Calculate required height based on visible elements
+        required_height = 0
+
+        # Tabs and status bar
+        required_height += self.tabs_frame.winfo_reqheight()
+        required_height += self.status_frame.winfo_reqheight()
+
+        # Tree area (if visible in current mode)
+        if tree_visible:
+            # Use the tree's requested height which respects the height parameter
+            required_height += self.upper_frame.winfo_reqheight()
+            # Search field
+            required_height += self.middle_frame.winfo_reqheight()
+
+        # EXIF panel (if visible)
+        if exif_panel_visible and hasattr(self, 'exif_frame'):
+            required_height += self.exif_frame.winfo_reqheight()
+
+        # Bottom controls (if not in EXIF mode)
+        if not exif_panel_visible:
+            required_height += self.bottom_frame.winfo_reqheight()
+
+        # Add some padding
+        required_height += 20
+
+        # Get current width
+        current_width = self.winfo_width()
+        if current_width < 800:
+            current_width = 800
+
+        # Set geometry, ensuring minimum height
+        min_height = 300
+        final_height = max(required_height, min_height)
+
+        self.geometry(f"{current_width}x{final_height}")
 
     def _update_tab_appearance(self):
         """Update tab visual appearance based on current mode."""
@@ -153,9 +249,9 @@ class MainWindow(TkinterDnD.Tk):
 
     def _create_frames(self, main_container):
         frames = [
-            ('upper_frame', {'row': 1, 'column': 0, 'sticky': 'nsew'}),
-            ('middle_frame', {'row': 2, 'column': 0, 'sticky': 'nsew'}),
-            ('bottom_frame', {'row': 3, 'column': 0, 'sticky': 'nsew', 'padx': 10, 'pady': 10}),
+            ('upper_frame', {'row': 2, 'column': 0, 'sticky': 'nsew'}),
+            ('middle_frame', {'row': 3, 'column': 0, 'sticky': 'nsew'}),
+            ('bottom_frame', {'row': 4, 'column': 0, 'sticky': 'nsew', 'padx': 10, 'pady': 10}),
         ]
         for name, grid_args in frames:
             frame = ttk.Frame(main_container)
@@ -167,6 +263,14 @@ class MainWindow(TkinterDnD.Tk):
     def _setup_menu(self):
         menubar = tk.Menu(self)
         self.config(menu=menubar) # This line is now correct because self.config is no longer shadowed
+
+        # Edit menu with undo
+        edit_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_command(label="Undo Last Rename", command=self._undo_last_rename, accelerator="Ctrl+Z")
+        self.bind('<Control-z>', lambda e: self._undo_last_rename())
+
+        # Settings menu
         config_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Settings", menu=config_menu)
         config_menu.add_command(label="Preferences & Updates", command=self._show_preferences)
@@ -174,18 +278,35 @@ class MainWindow(TkinterDnD.Tk):
     def _setup_search_field(self):
         self.search_field = ttk.Entry(self.middle_frame)
         self.search_field.pack(fill='x', padx=10, pady=10)
+        self.search_field.insert(0, SEARCH_PLACEHOLDER)
+        self.search_field.config(foreground='gray')
+        self.search_field.bind("<FocusIn>", self._on_search_focus_in)
+        self.search_field.bind("<FocusOut>", self._on_search_focus_out)
         self.search_field.bind("<Return>", self.search)
 
+    def _on_search_focus_in(self, event):
+        """Clear placeholder text when search field gains focus."""
+        if self.search_field.get() == SEARCH_PLACEHOLDER:
+            self.search_field.delete(0, tk.END)
+            self.search_field.config(foreground='black')
+
+    def _on_search_focus_out(self, event):
+        """Restore placeholder text when search field loses focus and is empty."""
+        if not self.search_field.get():
+            self.search_field.insert(0, SEARCH_PLACEHOLDER)
+            self.search_field.config(foreground='gray')
+
     def _setup_treeview_and_scrollbars(self):
-        self.tree = ttk.Treeview(self.upper_frame, columns=self.tree_columns, show="headings")
+        # Set height=10 to ensure minimum visible rows
+        self.tree = ttk.Treeview(self.upper_frame, columns=self.tree_columns, show="headings", height=10)
         self.vsb = ttk.Scrollbar(self.upper_frame, orient="vertical", command=self.tree.yview)
         self.hsb = ttk.Scrollbar(self.upper_frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=self.vsb.set, xscrollcommand=self.hsb.set)
-        
+
         self.tree.grid(row=0, column=0, sticky="nsew")
         self.vsb.grid(row=0, column=1, sticky="ns")
         self.hsb.grid(row=1, column=0, sticky="ew")
-        
+
         self.upper_frame.grid_columnconfigure(0, weight=1)
         self.upper_frame.grid_rowconfigure(0, weight=1)
         self.tree.bind("<ButtonRelease-1>", self._row_selected)
@@ -194,6 +315,20 @@ class MainWindow(TkinterDnD.Tk):
         for col in self.tree_columns:
             self.tree.heading(col, text=col.title(), command=lambda c=col: self.sortby(self.tree, c, False))
             self.tree.column(col, width=tkFont.Font().measure(col.title()), anchor='w')
+
+    def _setup_tooltips(self):
+        """Add tooltips to UI elements for better usability."""
+        ToolTip(self.search_field, msg="Search by family, genus, species, or common name")
+        ToolTip(self.cb_family, msg="Select a fish family to filter")
+        ToolTip(self.cb_genus, msg="Select a genus within the family")
+        ToolTip(self.cb_species, msg="Select the species")
+        ToolTip(self.cb_confidence, msg="How certain is this identification?")
+        ToolTip(self.cb_phase, msg="Life phase (juvenile, adult, etc.)")
+        ToolTip(self.cb_colour, msg="Color variation")
+        ToolTip(self.cb_behaviour, msg="Observed behaviour")
+        ToolTip(self.cb_author, msg="Photographer who took the image")
+        ToolTip(self.cb_site, msg="Dive site location")
+        ToolTip(self.cb_activity, msg="Activity type (diving, snorkeling, etc.)")
 
     def _setup_combobox_group(self, frame, configs):
         for config in configs:
@@ -248,10 +383,119 @@ class MainWindow(TkinterDnD.Tk):
         self.bt_rename.grid(row=0, column=0, padx=5, pady=2, sticky='ew')
         self.bt_rename.grid_remove()
 
+    def _setup_exif_frame(self):
+        """Setup the EXIF mode UI panel."""
+        self.exif_frame = ttk.Frame(self, padding=10)
+        self.exif_frame.grid(row=4, column=0, sticky='nsew')
+        self.exif_frame.grid_remove()  # Hidden by default
+
+        # ExifTool status section
+        status_frame = ttk.LabelFrame(self.exif_frame, text="ExifTool Status", padding=10)
+        status_frame.pack(fill='x', padx=5, pady=5)
+
+        self.exiftool_status_label = ttk.Label(status_frame, text="Checking...")
+        self.exiftool_status_label.pack(anchor='w')
+
+        self.exiftool_version_label = ttk.Label(status_frame, text="")
+        self.exiftool_version_label.pack(anchor='w')
+
+        # Install/download buttons frame
+        self.exiftool_buttons_frame = ttk.Frame(status_frame)
+        self.exiftool_buttons_frame.pack(fill='x', pady=(10, 0))
+
+        self.btn_install_exiftool = ttk.Button(
+            self.exiftool_buttons_frame,
+            text="Install ExifTool (Windows)",
+            command=self._install_exiftool
+        )
+
+        self.btn_open_website = ttk.Button(
+            self.exiftool_buttons_frame,
+            text="Open ExifTool Website",
+            command=self._open_exiftool_website
+        )
+
+        self.btn_refresh_status = ttk.Button(
+            self.exiftool_buttons_frame,
+            text="Refresh",
+            command=self._update_exiftool_status
+        )
+        self.btn_refresh_status.pack(side='left', padx=(0, 5))
+
+        # Instructions
+        instructions_frame = ttk.LabelFrame(self.exif_frame, text="Instructions", padding=10)
+        instructions_frame.pack(fill='x', padx=5, pady=5)
+
+        instructions_text = (
+            "1. Ensure ExifTool is installed (see status above)\n"
+            "2. Drop image files with Basic or Identify format filenames\n"
+            "3. Review extracted locations in the preview\n"
+            "4. Confirm to write GPS coordinates to images"
+        )
+        ttk.Label(instructions_frame, text=instructions_text, justify='left').pack(anchor='w')
+
+        # Camera model selection
+        camera_frame = ttk.LabelFrame(self.exif_frame, text="Camera Model (Optional)", padding=10)
+        camera_frame.pack(fill='x', padx=5, pady=5)
+
+        camera_label = ttk.Label(camera_frame, text="Select camera model to include in filename:")
+        camera_label.pack(anchor='w', pady=(0, 5))
+
+        self.cb_camera_model = ttk.Combobox(camera_frame, values=['', 'S-A7IV'], state='readonly', width=20)
+        self.cb_camera_model.set('')  # Default to empty
+        self.cb_camera_model.pack(anchor='w')
+
+    def _update_exiftool_status(self):
+        """Update the ExifTool status display."""
+        import sys
+
+        if self.exiftool.is_available():
+            version = self.exiftool.get_version()
+            self.exiftool_status_label.config(
+                text="Status: Installed",
+                foreground='green'
+            )
+            self.exiftool_version_label.config(text=f"Version: {version}")
+            self.btn_install_exiftool.pack_forget()
+            self.btn_open_website.pack_forget()
+        else:
+            self.exiftool_status_label.config(
+                text="Status: Not installed",
+                foreground='red'
+            )
+            self.exiftool_version_label.config(text="ExifTool is required to write GPS coordinates")
+
+            # Show install button on Windows, website button on other platforms
+            if sys.platform == "win32":
+                self.btn_install_exiftool.pack(side='left', padx=(0, 5))
+            self.btn_open_website.pack(side='left', padx=(0, 5))
+
+    def _install_exiftool(self):
+        """Attempt to download and install ExifTool."""
+        self.exiftool_status_label.config(text="Installing...", foreground='orange')
+        self.update_idletasks()
+
+        def progress_callback(percent, message):
+            self.exiftool_version_label.config(text=f"{message} ({percent}%)")
+            self.update_idletasks()
+
+        success, message = self.exiftool.download_and_install(progress_callback)
+
+        if success:
+            self._notice(message)
+        else:
+            self._warn(message)
+
+        self._update_exiftool_status()
+
+    def _open_exiftool_website(self):
+        """Open the ExifTool website in the default browser."""
+        import webbrowser
+        webbrowser.open(self.exiftool.get_website_url())
+
     def _setup_status_text(self):
-        self.status = tk.Text(self.bottom_frame, height=3, width=1, font=("Arial", 8))
-        self.status.grid(row=4, column=3, padx=5, pady=2, sticky='ew', rowspan=3)
-        self._notice(STATUS_READY)
+        """Status is now handled by status_label in the status bar below tabs."""
+        pass  # Status bar is created in _setup_mode_tabs
 
     def on_data_updated(self):
         """Reload all data files and refresh the UI.
@@ -259,10 +503,11 @@ class MainWindow(TkinterDnD.Tk):
         Called after updating data files from the web or when explicitly requested.
         Reloads CSV/JSON data files, updates all comboboxes, and saves config.
         """
-        status = self.data.load_all_data()
-        self._notice(status)
+        self.data.load_all_data()
         self.update_all_comboboxes()
         self.config_manager.save()
+        # Show mode hint after data is loaded
+        self._toggle_extended_info()
 
     def update_all_comboboxes(self):
         """Refresh all combobox values from loaded data.
@@ -277,18 +522,24 @@ class MainWindow(TkinterDnD.Tk):
         self.cb_species['values'] = ['spec'] + self.data.get_unique_values('Species')
         self.cb_species.set(self.data.species_default)
 
-        self.cb_author['values'] = self.data.get_unique_values('Full name', 'users_df')
-        self.cb_author.set(0)  # Default to empty string
+        # Filter out empty strings and prepend default text
+        author_values = [v for v in self.data.get_unique_values('Full name', 'users_df') if v]
+        self.cb_author['values'] = [DEFAULT_PHOTOGRAPHER_TEXT] + author_values
+        self.cb_author.set(DEFAULT_PHOTOGRAPHER_TEXT)  # Default to placeholder text
 
         self.cb_confidence['values'] = self.data.get_active_labels('Confidence')
         self.cb_phase['values'] = self.data.get_active_labels('Phase')
         self.cb_colour['values'] = self.data.get_active_labels('Colour')
         self.cb_behaviour['values'] = self.data.get_active_labels('Behaviour')
 
-        self.cb_site['values'] = self.data.get_formatted_site_list()
-        self.cb_site.set(DEFAULT_SITE_TEXT)  # Default to empty string
+        # Prepend default text to site list
+        site_values = self.data.get_formatted_site_list()
+        self.cb_site['values'] = [DEFAULT_SITE_TEXT] + site_values
+        self.cb_site.set(DEFAULT_SITE_TEXT)  # Default to placeholder text
 
-        self.cb_activity['values'] = self.data.get_unique_values('activity', 'activities_df')
+        # Filter out empty strings and prepend default text
+        activity_values = [v for v in self.data.get_unique_values('activity', 'activities_df') if v]
+        self.cb_activity['values'] = [DEFAULT_ACTIVITY_TEXT] + activity_values
 
         # Restore selections from config
         self.cb_author.set(self.config_manager.get_user_pref('author', DEFAULT_PHOTOGRAPHER_TEXT))
@@ -316,13 +567,17 @@ class MainWindow(TkinterDnD.Tk):
         Args:
             event: Tkinter DND event containing dropped file paths
         """
+        # Reset background color
+        self.config(bg=self._default_bg)
+
         files = self.splitlist(event.data)
         mode = self.mode.get()
 
         mode_handlers = {
             "Edit": self._handle_edit_mode,
             "Basic": self._handle_basic_mode,
-            "Identify": self._handle_identify_mode
+            "Identify": self._handle_identify_mode,
+            "Meta": self._handle_exif_mode
         }
 
         handler = mode_handlers.get(mode)
@@ -335,6 +590,7 @@ class MainWindow(TkinterDnD.Tk):
         """Prepare files for batch editing.
 
         Analyzes dropped files to find common fields that can be batch edited.
+        Supports both Basic and Identity format files.
         Enables only those fields in the UI and populates them with common values.
 
         Args:
@@ -343,8 +599,23 @@ class MainWindow(TkinterDnD.Tk):
         self.files_to_edit = files  # Store full paths for later
         basenames = [os.path.splitext(os.path.basename(f))[0] for f in files]
 
+        # Detect file format (Basic or Identity)
+        first_basename = basenames[0]
+        is_identity_format = self.assembler.regex_match_identity(first_basename) is not None
+        is_basic_format = self.assembler.regex_match_basic(first_basename) is not None
+
         try:
-            is_same, values = self.assembler.analyze_files_for_editing(basenames)
+            if is_identity_format:
+                # Use Identity format analysis
+                is_same, values = self.assembler.analyze_files_for_editing(basenames)
+                self.editing_format = 'identity'
+            elif is_basic_format:
+                # Use Basic format analysis
+                is_same, values = self.assembler.analyze_basic_files_for_editing(basenames)
+                self.editing_format = 'basic'
+            else:
+                self._warn("Files are not in Basic or Identity format.")
+                return
         except ValueError as e:
             self._warn(f"Error analyzing files: {e}")
             return
@@ -359,12 +630,20 @@ class MainWindow(TkinterDnD.Tk):
         # Map the 13-element array to the 10 UI controls
         ui_flags = is_same[[0, 1, 2, 3, 4, 5, 6, 7, 8, 11]]
         ui_values = values[[0, 1, 2, 3, 4, 5, 6, 7, 8, 11]]
-        for i, field in zip([3, 4, 5, 6], ['Confidence', 'Phase', 'Colour', 'Behaviour']):
-            ui_values[i] = self.data.labels[field][str(ui_values[i])]
+
+        # Convert attribute abbreviations to labels (only for Identity format)
+        if self.editing_format == 'identity':
+            for i, field in zip([3, 4, 5, 6], ['Confidence', 'Phase', 'Colour', 'Behaviour']):
+                if ui_values[i] is not None:
+                    ui_values[i] = self.data.labels[field][str(ui_values[i])]
 
         self._toggle_checkboxes(*ui_flags)
         self._set_checkboxes(*ui_values)
-        self._notice(f"Loaded {len(files)} files for editing. Make changes and click 'Rename'.")
+
+        format_name = "Identity" if self.editing_format == 'identity' else "Basic"
+        self._notice(f"Loaded {len(files)} {format_name} format files for editing. Make changes and click 'Rename'.")
+        # Adjust window to fit newly visible controls
+        self._adjust_window_height()
 
     def _handle_basic_mode(self, files):
         """Rename files with basic metadata (photographer, site, activity).
@@ -391,13 +670,61 @@ class MainWindow(TkinterDnD.Tk):
             return
 
         site_tuple = tuple(site_raw.split(", ", 1))
-        renamed_count = 0
 
-        for file_path in files:
-            if self._rename_single_file_basic(file_path, author, site_tuple, activity):
+        # Generate previews
+        previews = self._generate_previews_basic(files, author, site_tuple, activity)
+
+        # Show preview dialog
+        from .preview_dialog import BatchPreviewDialog
+        dialog = BatchPreviewDialog(self, previews)
+        self.wait_window(dialog)
+
+        to_rename = dialog.get_files_to_rename()
+        if not to_rename:
+            self._notice("Rename cancelled")
+            return
+
+        # Clear history for new rename batch
+        self.rename_history.clear()
+
+        renamed_count = 0
+        for mapping in to_rename:
+            if self._rename_single_file_basic(mapping['path'], author, site_tuple, activity):
                 renamed_count += 1
 
-        self._notice(f"{renamed_count}/{len(files)} files renamed.")
+        self._notice(f"{renamed_count}/{len(to_rename)} files renamed.")
+
+    def _generate_previews_basic(self, files, author, site_tuple, activity):
+        """Generate preview data for basic mode renames.
+
+        Args:
+            files: List of file paths
+            author: Photographer name
+            site_tuple: (area, site) tuple
+            activity: Activity type
+
+        Returns:
+            List of dicts with keys: path, original, new, error
+        """
+        previews = []
+        for file_path in files:
+            original = os.path.basename(file_path)
+            name, ext = os.path.splitext(original)
+
+            preview = {'path': file_path, 'original': original, 'new': None, 'error': None}
+
+            file_date = self.exif.get_creation_date_str(file_path)
+            if not file_date:
+                preview['error'] = 'No EXIF date'
+            else:
+                new_name = self.assembler.assemble_basic_filename(name, file_date, author, site_tuple, activity)
+                if new_name:
+                    preview['new'] = new_name + ext
+                else:
+                    preview['error'] = 'Already processed'
+
+            previews.append(preview)
+        return previews
 
     def _handle_identify_mode(self, files):
         """Rename files with taxonomic identification and attributes.
@@ -417,16 +744,325 @@ class MainWindow(TkinterDnD.Tk):
         colour = self.data.get_abbreviation_reverse("Colour", self.cb_colour.get())
         behaviour = self.data.get_abbreviation_reverse("Behaviour", self.cb_behaviour.get())
 
+        # Generate previews
+        previews = self._generate_previews_identify(
+            files, family, genus, species, confidence, phase, colour, behaviour
+        )
+
+        # Show preview dialog
+        from .preview_dialog import BatchPreviewDialog
+        dialog = BatchPreviewDialog(self, previews)
+        self.wait_window(dialog)
+
+        to_rename = dialog.get_files_to_rename()
+        if not to_rename:
+            self._notice("Rename cancelled")
+            return
+
+        # Clear history for new rename batch
+        self.rename_history.clear()
+
         renamed_count = 0
 
-        for file_path in files:
+        for mapping in to_rename:
             if self._rename_single_file_identity(
-                file_path, family, genus, species, confidence, phase, colour, behaviour
+                mapping['path'], family, genus, species, confidence, phase, colour, behaviour
             ):
                 renamed_count += 1
 
-        self._notice(f"{renamed_count}/{len(files)} files renamed.")
+        self._notice(f"{renamed_count}/{len(to_rename)} files renamed.")
         self._reset_info()
+
+    def _generate_previews_identify(self, files, family, genus, species,
+                                     confidence, phase, colour, behaviour):
+        """Generate preview data for identify mode renames.
+
+        Args:
+            files: List of file paths
+            family: Fish family
+            genus: Fish genus
+            species: Fish species
+            confidence: Confidence level abbreviation
+            phase: Phase abbreviation
+            colour: Colour abbreviation
+            behaviour: Behaviour abbreviation
+
+        Returns:
+            List of dicts with keys: path, original, new, error
+        """
+        previews = []
+        for file_path in files:
+            original = os.path.basename(file_path)
+            name, ext = os.path.splitext(original)
+
+            preview = {'path': file_path, 'original': original, 'new': None, 'error': None}
+
+            new_name = self.assembler.assemble_identity_filename(
+                name, family, genus, species, confidence, phase, colour, behaviour
+            )
+            if new_name:
+                preview['new'] = new_name + ext
+            else:
+                preview['error'] = 'Invalid format'
+
+            previews.append(preview)
+        return previews
+
+    def _handle_exif_mode(self, files):
+        """Write GPS coordinates to image EXIF data.
+
+        Extracts site string from filenames, looks up coordinates from the
+        divesites database, and writes GPS coordinates to image EXIF data.
+
+        Args:
+            files: List of absolute file paths to process
+        """
+        # Check ExifTool availability
+        if not self.exiftool.is_available():
+            self._warn("ExifTool is not installed. Please install it first.")
+            return
+
+        # Generate previews by extracting site from each filename
+        previews = self._generate_previews_exif(files)
+
+        # Show preview dialog
+        from .exif_preview_dialog import ExifPreviewDialog
+        dialog = ExifPreviewDialog(self, previews)
+        self.wait_window(dialog)
+
+        to_process = dialog.get_files_to_process()
+        if not to_process:
+            self._notice("GPS writing cancelled")
+            return
+
+        # Write GPS to files and rename them
+        success_count = 0
+        rename_count = 0
+
+        for mapping in to_process:
+            # Write GPS coordinates
+            success, _ = self.exiftool.write_gps_coordinates(
+                mapping['path'], mapping['lat'], mapping['lon']
+            )
+            if success:
+                success_count += 1
+
+                # Rename file to include GPS marker (if filename changed)
+                new_filename = mapping.get('new_filename')
+                current_filename = os.path.basename(mapping['path'])
+
+                if new_filename and new_filename != current_filename:
+                    dir_name = os.path.dirname(mapping['path'])
+                    new_path = os.path.join(dir_name, new_filename)
+
+                    # Check if target already exists
+                    if not os.path.exists(new_path):
+                        try:
+                            os.rename(mapping['path'], new_path)
+                            rename_count += 1
+                            logger.debug(f"Renamed: {current_filename} -> {new_filename}")
+                        except OSError as e:
+                            logger.warning(f"Failed to rename {current_filename}: {e}")
+                    else:
+                        logger.warning(f"Cannot rename to {new_filename}: file already exists")
+                elif new_filename == current_filename:
+                    # Filename unchanged (GPS marker already present)
+                    logger.debug(f"Skipped rename for {current_filename}: GPS marker already present")
+                    rename_count += 1  # Count as successful since no rename needed
+
+        if rename_count == success_count:
+            self._notice(f"GPS written and {rename_count}/{len(to_process)} files renamed")
+        else:
+            self._notice(f"GPS written to {success_count}/{len(to_process)} files, {rename_count} renamed")
+
+    def _construct_gps_filename(self, filename_without_ext, camera_model=''):
+        """Construct new filename with GPS marker (_G_) and optional camera model.
+
+        Inserts "_G_" (and camera model if provided) between activity and original filename.
+        If "_G_" already exists, updates or adds camera model as needed without duplicating.
+
+        Args:
+            filename_without_ext: Filename without extension
+            camera_model: Camera model string (optional)
+
+        Returns:
+            New filename with GPS marker, or None if format is invalid
+        """
+        # Try to match identity format first
+        match = self.assembler.regex_match_identity(filename_without_ext)
+        if match:
+            groups = match.groups()
+            # Groups: 0: Family, 1: Genus, 2: Species, 3: Confidence, 4: Phase,
+            #         5: Colour, 6: Behaviour, 7: Author, 8: Site, 9: Date,
+            #         10: Time, 11: Activity, 12: Original name
+            # NOTE: "_B_" literal separator exists between Species (2) and Confidence (3) but is not captured
+
+            family, genus, species = groups[0], groups[1], groups[2]
+            confidence, phase, colour, behaviour = groups[3], groups[4], groups[5], groups[6]
+            author, site, date, time = groups[7], groups[8], groups[9], groups[10]
+            activity = groups[11]
+            original_name = groups[12]
+
+            # Check if GPS marker already exists in original_name
+            # Format could be: G_cameramodel_filename or G_filename
+            name_parts = original_name.split('_')
+            if name_parts[0] == 'G':
+                # GPS marker already exists
+                if len(name_parts) >= 3 and name_parts[1] and name_parts[1][0].isupper():
+                    # Has camera model: G_cameramodel_filename
+                    actual_filename = '_'.join(name_parts[2:])
+
+                    if camera_model:
+                        # Replace with new camera model
+                        return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{author}_{site}_{date}_{time}_{activity}_G_{camera_model}_{actual_filename}"
+                    else:
+                        # Remove camera model (no camera selected)
+                        return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{author}_{site}_{date}_{time}_{activity}_G_{actual_filename}"
+                else:
+                    # No camera model: G_filename
+                    actual_filename = '_'.join(name_parts[1:])
+
+                    if camera_model:
+                        # Add camera model
+                        return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{author}_{site}_{date}_{time}_{activity}_G_{camera_model}_{actual_filename}"
+                    else:
+                        # Keep as is (no camera model in filename, none selected)
+                        return filename_without_ext
+            else:
+                # No GPS marker yet, add it
+                if camera_model:
+                    return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{author}_{site}_{date}_{time}_{activity}_G_{camera_model}_{original_name}"
+                else:
+                    return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{author}_{site}_{date}_{time}_{activity}_G_{original_name}"
+
+        # Try basic format
+        match = self.assembler.regex_match_basic(filename_without_ext)
+        if match:
+            # Basic format: AuthorCode_SiteString_Date_Time_Activity_OriginalName
+            # Or with GPS: AuthorCode_SiteString_Date_Time_Activity_G_CameraModel_OriginalName
+            parts = filename_without_ext.split('_')
+            if len(parts) >= 6:
+                parts_before_activity = parts[:4]  # AuthorCode, SiteString, Date, Time
+                activity = parts[4]
+                remaining_parts = parts[5:]  # Everything after activity
+
+                # Check if GPS marker exists
+                if remaining_parts and remaining_parts[0] == 'G':
+                    # GPS marker already exists
+                    if len(remaining_parts) >= 3 and remaining_parts[1] and remaining_parts[1][0].isupper():
+                        # Has camera model: G_cameramodel_filename
+                        actual_filename = '_'.join(remaining_parts[2:])
+
+                        if camera_model:
+                            # Replace with new camera model
+                            new_parts = parts_before_activity + [activity, 'G', camera_model, actual_filename]
+                        else:
+                            # Remove camera model (no camera selected)
+                            new_parts = parts_before_activity + [activity, 'G', actual_filename]
+                    else:
+                        # No camera model: G_filename
+                        actual_filename = '_'.join(remaining_parts[1:])
+
+                        if camera_model:
+                            # Add camera model
+                            new_parts = parts_before_activity + [activity, 'G', camera_model, actual_filename]
+                        else:
+                            # Keep as is (no camera model in filename, none selected)
+                            return filename_without_ext
+                else:
+                    # No GPS marker yet, add it
+                    original_name = '_'.join(remaining_parts)
+                    if camera_model:
+                        new_parts = parts_before_activity + [activity, 'G', camera_model, original_name]
+                    else:
+                        new_parts = parts_before_activity + [activity, 'G', original_name]
+
+                return '_'.join(new_parts)
+
+        return None
+
+    def _generate_previews_exif(self, files):
+        """Generate preview data for EXIF GPS writing.
+
+        Extracts site string from each filename, looks up coordinates
+        from the divesites database, and generates new filename with GPS marker.
+
+        Args:
+            files: List of file paths
+
+        Returns:
+            List of dicts with keys: path, filename, site_string, site_name, lat, lon, new_filename, error
+        """
+        # Get camera model selection
+        camera_model = self.cb_camera_model.get() if hasattr(self, 'cb_camera_model') else ''
+
+        previews = []
+        for file_path in files:
+            filename = os.path.basename(file_path)
+            name, ext = os.path.splitext(filename)
+
+            preview = {
+                'path': file_path,
+                'filename': filename,
+                'site_string': None,
+                'site_name': None,
+                'lat': None,
+                'lon': None,
+                'new_filename': None,
+                'error': None
+            }
+
+            # Check if file exists and is an image
+            if not os.path.exists(file_path):
+                preview['error'] = 'File not found'
+                previews.append(preview)
+                continue
+
+            if ext.lower() not in IMAGE_FILE_EXTENSIONS:
+                preview['error'] = 'Not an image file'
+                previews.append(preview)
+                continue
+
+            # Extract site string from filename
+            site_string = self.assembler.extract_site_string(name)
+            if not site_string:
+                preview['error'] = 'Invalid filename format'
+                previews.append(preview)
+                continue
+
+            preview['site_string'] = site_string
+
+            # Look up site name
+            site_name = self.data.get_divesite_area_site(site_string)
+            if not site_name:
+                preview['error'] = f'Site not found: {site_string}'
+                previews.append(preview)
+                continue
+
+            preview['site_name'] = site_name
+
+            # Get coordinates
+            lat, lon = self.data.get_lat_long_from_site(site_name)
+            if lat is None or lon is None:
+                preview['error'] = 'No coordinates for site'
+                previews.append(preview)
+                continue
+
+            preview['lat'] = lat
+            preview['lon'] = lon
+
+            # Generate new filename with GPS marker
+            new_filename_body = self._construct_gps_filename(name, camera_model)
+            if new_filename_body:
+                preview['new_filename'] = new_filename_body + ext
+            else:
+                preview['error'] = 'Failed to generate GPS filename'
+                previews.append(preview)
+                continue
+
+            previews.append(preview)
+
+        return previews
 
     def _rename_single_file_basic(self, file_path, author, site_tuple, activity):
         """Rename a single file with basic metadata.
@@ -471,6 +1107,10 @@ class MainWindow(TkinterDnD.Tk):
 
                 # Remove backup on success
                 os.remove(backup_path)
+
+                # Record for undo
+                self.rename_history.append((file_path, new_path))
+
                 logger.debug(f"Successfully renamed: {os.path.basename(file_path)} -> {os.path.basename(new_path)}")
                 return True
             except Exception as e:
@@ -530,6 +1170,10 @@ class MainWindow(TkinterDnD.Tk):
 
                 # Remove backup on success
                 os.remove(backup_path)
+
+                # Record for undo
+                self.rename_history.append((file_path, new_path))
+
                 logger.debug(f"Successfully renamed: {os.path.basename(file_path)} -> {os.path.basename(new_path)}")
                 return True
             except Exception as e:
@@ -547,24 +1191,43 @@ class MainWindow(TkinterDnD.Tk):
             return False
 
     def _notice(self, text):
-        """Display an informational message in the status area.
+        """Display an informational message in the status bar.
 
         Args:
-            text: The message to display (shown in black)
+            text: The message to display (shown in dark gray)
         """
-        self.status.config(foreground="black")
-        self.status.delete(1.0, tk.END)
-        self.status.insert(1.0, text)
+        self.status_label.config(text=text, fg='#333333')
 
     def _warn(self, text):
-        """Display a warning or error message in the status area.
+        """Display a warning or error message in the status bar.
 
         Args:
             text: The warning message to display (shown in red)
         """
-        self.status.config(foreground="red")
-        self.status.delete(1.0, tk.END)
-        self.status.insert(1.0, text)
+        self.status_label.config(text=text, fg='#d32f2f')
+
+    def _undo_last_rename(self):
+        """Undo the last batch of rename operations.
+
+        Reverses all renames from the most recent rename operation by renaming
+        files back to their original names.
+        """
+        if not self.rename_history:
+            self._warn("Nothing to undo")
+            return
+
+        undone = 0
+        for old_path, new_path in reversed(self.rename_history):
+            if os.path.exists(new_path) and not os.path.exists(old_path):
+                try:
+                    os.rename(new_path, old_path)
+                    undone += 1
+                    logger.debug(f"Undone: {os.path.basename(new_path)} -> {os.path.basename(old_path)}")
+                except OSError as e:
+                    logger.warning(f"Failed to undo rename: {e}")
+
+        self.rename_history.clear()
+        self._notice(f"Undone {undone} rename(s)")
 
     def _save_user_prefs(self, event=None):
         """Save user preferences to config file.
@@ -581,13 +1244,14 @@ class MainWindow(TkinterDnD.Tk):
         self.config_manager.save()
 
     def _toggle_extended_info(self, event=None):
-        """Switch between Basic, Identify, and Edit modes.
+        """Switch between Basic, Identify, Edit, and EXIF modes.
 
         Adjusts which comboboxes are enabled/disabled and whether the Rename button
         is visible based on the selected mode:
         - Basic: Enable author, site, activity for metadata-only renaming
         - Identify: Enable taxonomy and attributes for adding identification
         - Edit: Disable all fields until files are loaded for batch editing
+        - EXIF: Show site selector for GPS coordinate writing
 
         Args:
             event: Tkinter event (can be None when called programmatically)
@@ -596,22 +1260,47 @@ class MainWindow(TkinterDnD.Tk):
         is_basic = mode == 'Basic'
         is_identify = mode == 'Identify'
         is_edit = mode == 'Edit'
+        is_meta = mode == 'Meta'
+
+        # Mode hints for status bar
+        mode_hints = {
+            'Basic': "Drop files to add photographer, site, and activity info",
+            'Identify': "Search or select a species, then drop files to identify",
+            'Edit': "Drop files to batch edit their metadata",
+            'Meta': "Drop Basic/Identify format files to auto-extract GPS from filename"
+        }
+
+        # Hide EXIF frame by default
+        if hasattr(self, 'exif_frame'):
+            self.exif_frame.grid_remove()
 
         if is_basic:
             self._toggle_checkboxes(False, False, False, False, False, False, False, True, True, True)
             self._toggle_tree(False)
             self.bt_rename.grid_remove()
+            self.bottom_frame.grid()
         elif is_identify:
             self._toggle_checkboxes(True, True, True, True, True, True, True, False, False, False)
             self._toggle_tree(True)
             self.bt_rename.grid_remove()
+            self.bottom_frame.grid()
         elif is_edit:
             self._toggle_checkboxes(False, False, False, False, False, False, False, False, False, False)
             self._toggle_tree(True)
             self.bt_rename.grid()
-            
-        self._reset_info()
-        self._notice(f"Switched to '{mode}' mode.")
+            self.bottom_frame.grid()
+        elif is_meta:
+            self._toggle_checkboxes(False, False, False, False, False, False, False, False, False, False)
+            self._toggle_tree(False)
+            self.bt_rename.grid_remove()
+            self.bottom_frame.grid_remove()
+            if hasattr(self, 'exif_frame'):
+                self.exif_frame.grid()
+                self._update_exiftool_status()
+
+        if not is_meta:
+            self._reset_info()
+        self._notice(mode_hints[mode])
     
     def _toggle_checkboxes(self, family, genus, species, confidence, phase, colour, behaviour, author, site, activity):
         """Show or hide comboboxes and their labels based on boolean flags.
@@ -717,7 +1406,7 @@ class MainWindow(TkinterDnD.Tk):
         """
         if not self.tree.selection(): return
         item = self.tree.selection()[0]
-        fam, gen, spec, _ = self.tree.item(item, 'values')
+        fam, gen, spec, common_name = self.tree.item(item, 'values')
         # Reset only attribute comboboxes (don't call _reset_info which rebuilds tree)
         self.cb_confidence.set(self.data.confidence_default)
         self.cb_phase.set(self.data.phase_default)
@@ -734,6 +1423,9 @@ class MainWindow(TkinterDnD.Tk):
         self.cb_genus['values'] = [self.data.genus_default] + sorted(fam_df['Genus'].unique())
         self.cb_species['values'] = [self.data.species_default] + sorted(fam_gen_df['Species'].unique())
 
+        # Show selected species in status bar
+        self._notice(f"Selected: {gen} {spec} ({common_name})")
+
 
     def fill_tree(self, items):
         """Populate the treeview with fish data.
@@ -744,6 +1436,8 @@ class MainWindow(TkinterDnD.Tk):
         self.clear_tree()
         for item in items:
             self.tree.insert('', 'end', values=item)
+        # Update Species header with count
+        self.tree.heading('Species', text=f'Species ({len(items)})')
 
     def clear_tree(self):
         """Remove all items from the treeview."""
@@ -757,8 +1451,16 @@ class MainWindow(TkinterDnD.Tk):
             event: Tkinter event (can be None)
         """
         search_string = self.search_field.get()
+        # Ignore placeholder text
+        if search_string == SEARCH_PLACEHOLDER:
+            search_string = ""
         results = self.data.search_fish(search_string)
         self.fill_tree(results.values.tolist())
+
+        # Show search results count
+        count = len(results)
+        if search_string:
+            self._notice(f"Found {count} species matching '{search_string}'")
 
     def set_family(self, event):
         """Filter species by selected family and update genus/species dropdowns.
@@ -793,7 +1495,7 @@ class MainWindow(TkinterDnD.Tk):
         """
         family = self.cb_family.get()
         genus = self.cb_genus.get()
-        print(genus, self.data.genus_default)
+
         if genus == self.data.genus_default:
             filtered_df = self.data.filter_fish({'Family': family})
             self.cb_genus['values'] = [self.data.genus_default] + sorted(filtered_df['Genus'].unique())
@@ -865,18 +1567,122 @@ class MainWindow(TkinterDnD.Tk):
             self._warn("No files selected for editing")
             return
 
+        # Generate previews
+        previews = self._generate_previews_edit(self.editing_files)
+
+        # Show preview dialog
+        from .preview_dialog import BatchPreviewDialog
+        dialog = BatchPreviewDialog(self, previews)
+        self.wait_window(dialog)
+
+        to_rename = dialog.get_files_to_rename()
+        if not to_rename:
+            self._notice("Rename cancelled")
+            return
+
+        # Clear history for new rename batch
+        self.rename_history.clear()
+
         renamed_count = 0
 
-        for file_path in self.editing_files:
-            if self._edit_single_file(file_path):
+        for mapping in to_rename:
+            if self._edit_single_file(mapping['path']):
                 renamed_count += 1
 
         # Update UI
-        self._notice(f"{renamed_count}/{len(self.editing_files)} files were renamed successfully.")
+        self._notice(f"{renamed_count}/{len(to_rename)} files were renamed successfully.")
         self._cleanup_after_edit()
+
+    def _generate_previews_edit(self, files):
+        """Generate preview data for edit mode renames.
+
+        Handles both Basic and Identity format files.
+
+        Args:
+            files: List of file paths
+
+        Returns:
+            List of dicts with keys: path, original, new, error
+        """
+        previews = []
+        for file_path in files:
+            original = os.path.basename(file_path)
+            filepath, extension = os.path.splitext(file_path)
+            basename = os.path.basename(filepath)
+
+            preview = {'path': file_path, 'original': original, 'new': None, 'error': None}
+
+            if self.editing_format == 'identity':
+                # Parse Identity format filename
+                match = self.assembler.regex_match_identity(basename)
+                if not match:
+                    preview['error'] = 'Invalid format'
+                    previews.append(preview)
+                    continue
+
+                info = match.groups()
+
+                # Build new filename from edited/original fields
+                edited_fields = self._collect_edited_fields(info)
+
+                new_filename = self.assembler.assemble_edited_filename(
+                    edited_fields['family'],
+                    edited_fields['genus'],
+                    edited_fields['species'],
+                    edited_fields['confidence'],
+                    edited_fields['phase'],
+                    edited_fields['colour'],
+                    edited_fields['behaviour'],
+                    edited_fields['author_code'],
+                    edited_fields['site_string'],
+                    edited_fields['date'],
+                    edited_fields['time'],
+                    edited_fields['activity'],
+                    edited_fields['filename'],
+                    extension
+                )
+
+            elif self.editing_format == 'basic':
+                # Parse Basic format filename
+                parts = basename.split('_')
+                if len(parts) < 6:
+                    preview['error'] = 'Invalid format'
+                    previews.append(preview)
+                    continue
+
+                # Create info tuple matching Identity format structure
+                info = (None, None, None, None, None, None, None,
+                       parts[0], parts[1], parts[2], parts[3], parts[4], '_'.join(parts[5:]))
+
+                # Build new filename from edited/original fields
+                edited_fields = self._collect_edited_fields(info)
+
+                new_filename = self.assembler.assemble_edited_basic_filename(
+                    edited_fields['author_code'],
+                    edited_fields['site_string'],
+                    edited_fields['date'],
+                    edited_fields['time'],
+                    edited_fields['activity'],
+                    edited_fields['filename'],
+                    extension
+                )
+            else:
+                preview['error'] = 'Unknown format'
+                previews.append(preview)
+                continue
+
+            if new_filename:
+                preview['new'] = new_filename
+            else:
+                preview['error'] = 'Failed to generate name'
+
+            previews.append(preview)
+        return previews
 
     def _edit_single_file(self, file_path):
         """Edit a single file based on current UI selections.
+
+        Handles both Basic and Identity format files.
 
         Returns:
             bool: True if file was renamed successfully, False otherwise
@@ -885,32 +1691,58 @@ class MainWindow(TkinterDnD.Tk):
             filepath, extension = os.path.splitext(file_path)
             basename = os.path.basename(filepath)
 
-            # Parse existing filename
-            match = self.assembler.regex_match_identity(basename)
-            if not match:
+            if self.editing_format == 'identity':
+                # Parse Identity format filename
+                match = self.assembler.regex_match_identity(basename)
+                if not match:
+                    return False
+
+                info = match.groups()
+
+                # Build new filename from edited/original fields
+                edited_fields = self._collect_edited_fields(info)
+
+                new_filename = self.assembler.assemble_edited_filename(
+                    edited_fields['family'],
+                    edited_fields['genus'],
+                    edited_fields['species'],
+                    edited_fields['confidence'],
+                    edited_fields['phase'],
+                    edited_fields['colour'],
+                    edited_fields['behaviour'],
+                    edited_fields['author_code'],
+                    edited_fields['site_string'],
+                    edited_fields['date'],
+                    edited_fields['time'],
+                    edited_fields['activity'],
+                    edited_fields['filename'],
+                    extension
+                )
+
+            elif self.editing_format == 'basic':
+                # Parse Basic format filename
+                parts = basename.split('_')
+                if len(parts) < 6:
+                    return False
+
+                # Create info tuple matching Identity format structure
+                info = (None, None, None, None, None, None, None,
+                       parts[0], parts[1], parts[2], parts[3], parts[4], '_'.join(parts[5:]))
+
+                # Build new filename from edited/original fields
+                edited_fields = self._collect_edited_fields(info)
+
+                new_filename = self.assembler.assemble_edited_basic_filename(
+                    edited_fields['author_code'],
+                    edited_fields['site_string'],
+                    edited_fields['date'],
+                    edited_fields['time'],
+                    edited_fields['activity'],
+                    edited_fields['filename'],
+                    extension
+                )
+            else:
                 return False
-
-            info = match.groups()
-
-            # Build new filename from edited/original fields
-            edited_fields = self._collect_edited_fields(info)
-
-            new_filename = self.assembler.assemble_edited_filename(
-                edited_fields['family'],
-                edited_fields['genus'],
-                edited_fields['species'],
-                edited_fields['confidence'],
-                edited_fields['phase'],
-                edited_fields['colour'],
-                edited_fields['behaviour'],
-                edited_fields['author_code'],
-                edited_fields['site_string'],
-                edited_fields['date'],
-                edited_fields['time'],
-                edited_fields['activity'],
-                edited_fields['filename'],
-                extension
-            )
 
             from pathlib import Path
             from src.app_utils import validate_safe_path
@@ -939,6 +1771,10 @@ class MainWindow(TkinterDnD.Tk):
 
                 # Remove backup on success
                 os.remove(backup_path)
+
+                # Record for undo
+                self.rename_history.append((file_path, new_filepath))
+
                 logger.debug(f"Successfully edited: {os.path.basename(file_path)} -> {os.path.basename(new_filepath)}")
                 return True
             except Exception as e:

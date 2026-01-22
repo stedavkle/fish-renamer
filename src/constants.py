@@ -85,6 +85,9 @@ DEFAULT_LOCATION_TEXT = 'Select location'
 MAIN_WINDOW_TITLE = "Dave's Fish Renamer"
 PREFERENCES_WINDOW_TITLE = "Preferences & Updates"
 
+# Search placeholder
+SEARCH_PLACEHOLDER = "Search by family, genus, species, or common name..."
+
 # Status messages
 STATUS_READY = "Ready"
 STATUS_IDLE = "Status: Idle"
@@ -93,7 +96,7 @@ STATUS_IDLE = "Status: Idle"
 # File Extensions
 # ==============================================================================
 DATA_FILE_EXTENSIONS = {'.csv', '.json'}
-IMAGE_FILE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.tiff', '.tif', '.raw'}
+IMAGE_FILE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.raw', '.hif'}
 
 # ==============================================================================
 # Configuration

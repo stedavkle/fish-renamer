@@ -1,5 +1,8 @@
 # exif_handler.py
 from PIL import Image
+from pillow_heif import register_heif_opener
+register_heif_opener()
+
 import exifread
 import logging
 from .constants import EXIF_TAG_DATETIME_ORIGINAL, EXIF_TAG_DATETIME
