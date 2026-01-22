@@ -14,6 +14,18 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Get version
+        id: get_version
+        shell: pwsh
+        run: |
+          $ref = "${{ github.ref }}"
+          if ($ref -like "refs/tags/v*") {
+              $version = $ref.Substring($ref.LastIndexOf('v') + 1)
+          } else {
+              $version = "0.0.0.0"
+          }
+          echo "APP_VERSION=$version" >> $env:GITHUB_ENV
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -53,8 +65,22 @@ jobs:
       
       - name: Build with Nuitka
         run: |
-          python -m nuitka --standalone --onefile-no-compression --output-dir=distx64nuitka --output-filename=daves-fish-renamer --windows-icon-from-ico=config/icon.png --include-data-dir="config=config" --windows-console-mode=disable --plugin-enable=upx --upx-binary="$env:LOCALAPPDATA\upx-5.0.0-win64\upx-5.0.0-win64\upx.exe" --enable-plugin=tk-inter --disable-ccache main.py
-      
+          python -m nuitka --standalone --onefile-no-compression `
+            --output-dir=distx64nuitka `
+            --output-filename=daves-fish-renamer `
+            --windows-icon-from-ico=config/icon.png `
+            --include-data-dir="config=config" `
+            --windows-console-mode=disable `
+            --plugin-enable=upx `
+            --upx-binary="$env:LOCALAPPDATA\upx-5.0.0-win64\upx-5.0.0-win64\upx.exe" `
+            --enable-plugin=tk-inter `
+            --disable-ccache `
+            --windows-company-name="Dave" `
+            --windows-product-name="FishRenamer" `
+            --windows-file-version=${{ env.APP_VERSION }} `
+            --windows-product-version=${{ env.APP_VERSION }} `
+            main.py
+            
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
         with:
@@ -67,6 +93,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      # 1. Extract the version from the tag
+      - name: Get version
+        id: get_version
+        run: |
+          # If triggered by a tag, use the tag name (e.g., v0.3.0 -> 0.3.0)
+          # If not a tag (e.g., manual run), fallback to a default version
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "APP_VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -79,17 +118,30 @@ jobs:
           pip install nuitka
       
       - name: Install ccache
-        run: |
-          brew install ccache
+        run: brew install ccache
 
+      # 2. Use the environment variable in the Nuitka command
       - name: Build with Nuitka
         run: |
-          python -m nuitka --standalone --macos-create-app-bundle --macos-app-icon=config/icon.png --enable-plugin=tk-inter --include-data-dir="config=config" --disable-ccache --output-dir=distmipsnuitka --remove-output --macos-app-name=FishRenamer --macos-app-version=0.2.5 --macos-signed-app-name=de.dave.FishRenamer --output-filename=daves-fish-renamer ./main.py
+          python -m nuitka --standalone \
+            --macos-create-app-bundle \
+            --macos-app-icon=config/icon.png \
+            --enable-plugin=tk-inter \
+            --include-data-dir="config=config" \
+            --disable-ccache \
+            --output-dir=distmipsnuitka \
+            --remove-output \
+            --macos-app-name=FishRenamer \
+            --macos-app-version=${{ env.APP_VERSION }} \
+            --macos-signed-app-name=de.dave.FishRenamer \
+            --output-filename=daves-fish-renamer \
+            ./main.py
 
       - name: Zip macOS app
         run: |
           cd distmipsnuitka
-          mv main.app daves-fish-renamer.app
+          # Note: Nuitka creates the .app based on --macos-app-name
+          mv FishRenamer.app daves-fish-renamer.app
           tar -czf daves-fish-renamer.app.tar.gz daves-fish-renamer.app
           cd ..
       
