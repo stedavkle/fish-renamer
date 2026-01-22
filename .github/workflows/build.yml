@@ -53,7 +53,7 @@ jobs:
       
       - name: Build with Nuitka
         run: |
-          python -m nuitka --standalone --onefile --output-dir=distx64nuitka --output-filename=daves-fish-renamer --windows-icon-from-ico=config/icon.png --include-data-dir="config=config" --windows-console-mode=disable --plugin-enable=upx --upx-binary="$env:LOCALAPPDATA\upx-5.0.0-win64\upx-5.0.0-win64\upx.exe" --enable-plugin=tk-inter --disable-ccache main.py
+          python -m nuitka --standalone --onefile-no-compression --output-dir=distx64nuitka --output-filename=daves-fish-renamer --windows-icon-from-ico=config/icon.png --include-data-dir="config=config" --windows-console-mode=disable --plugin-enable=upx --upx-binary="$env:LOCALAPPDATA\upx-5.0.0-win64\upx-5.0.0-win64\upx.exe" --enable-plugin=tk-inter --disable-ccache main.py
       
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
