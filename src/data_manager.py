@@ -355,3 +355,50 @@ class DataManager:
             logger.error(f"Error extracting coordinates for '{site_string}': {e}")
 
         return (None, None)
+
+    def get_camera_models(self) -> List[str]:
+        """Get list of camera full names from labels.
+
+        Returns:
+            List of camera full names (e.g., ['Sony A7IV', 'Canon EOS R5'])
+        """
+        if 'Camera' not in self.labels:
+            return []
+        return [self.labels['Camera'][abbrev] for abbrev in self.labels['Camera']]
+
+    def get_camera_abbreviations(self) -> List[str]:
+        """Get list of camera abbreviations.
+
+        Returns:
+            List of camera abbreviations (e.g., ['S-A7IV', 'C-R5'])
+        """
+        if 'Camera' not in self.labels:
+            return []
+        return list(self.labels['Camera'].keys())
+
+    def get_camera_abbreviation(self, full_name: str) -> str:
+        """Get abbreviation from full camera name.
+
+        Args:
+            full_name: Full camera name (e.g., 'Sony A7IV')
+
+        Returns:
+            Camera abbreviation (e.g., 'S-A7IV'), or empty string if not found
+        """
+        if 'Camera' not in self.labels:
+            return ''
+        for abbrev, name in self.labels['Camera'].items():
+            if name == full_name:
+                return abbrev
+        return ''
+
+    def get_camera_full_name(self, abbrev: str) -> str:
+        """Get full name from camera abbreviation.
+
+        Args:
+            abbrev: Camera abbreviation (e.g., 'S-A7IV')
+
+        Returns:
+            Full camera name (e.g., 'Sony A7IV'), or empty string if not found
+        """
+        return self.labels.get('Camera', {}).get(abbrev, '')

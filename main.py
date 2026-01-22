@@ -1,7 +1,22 @@
 import logging
 import sys
+import platform
 from ui.main_window import MainWindow
 from src.app_utils import initialize_data_files
+
+def handle_console_visibility():
+    """Hide console window on Windows unless --debug flag is provided."""
+    if platform.system() == 'Windows' and '--debug' not in sys.argv:
+        try:
+            import ctypes
+            # Get handle to console window
+            console_window = ctypes.windll.kernel32.GetConsoleWindow()
+            if console_window:
+                # SW_HIDE = 0
+                ctypes.windll.user32.ShowWindow(console_window, 0)
+        except Exception:
+            # If hiding fails, just continue - not critical
+            pass
 
 def setup_logging():
     """Configure application-wide logging."""
@@ -32,6 +47,9 @@ def setup_logging():
     logger.info("=" * 60)
 
 if __name__ == '__main__':
+    # 0. Handle console visibility (hide unless --debug flag is present)
+    handle_console_visibility()
+
     # 1. Setup logging
     setup_logging()
 

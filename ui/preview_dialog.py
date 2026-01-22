@@ -39,16 +39,14 @@ class BatchPreviewDialog(tk.Toplevel):
         main_frame.pack(fill='both', expand=True)
 
         # Treeview with columns
-        columns = ('original', 'new', 'status')
+        columns = ('filename', 'status')
         self.tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=15)
 
-        self.tree.heading('original', text='Original Name')
-        self.tree.heading('new', text='New Name')
+        self.tree.heading('filename', text='Filename')
         self.tree.heading('status', text='Status')
 
         # Initial minimal widths - will be auto-fitted after populating
-        self.tree.column('original', width=100, minwidth=50)
-        self.tree.column('new', width=100, minwidth=50)
+        self.tree.column('filename', width=200, minwidth=100)
         self.tree.column('status', width=80, minwidth=50)
 
         # Scrollbars
@@ -119,12 +117,15 @@ class BatchPreviewDialog(tk.Toplevel):
             if error:
                 status = error
                 tag = 'error'
-                new = '-'
+                # Show original filename for errors
+                filename_display = original
             else:
                 status = 'OK'
                 tag = 'ok'
+                # Show new filename for successful renames
+                filename_display = new if new else original
 
-            self.tree.insert('', 'end', values=(original, new, status), tags=(tag,))
+            self.tree.insert('', 'end', values=(filename_display, status), tags=(tag,))
 
     def _auto_fit_columns(self):
         """Auto-fit column widths based on content."""
@@ -134,21 +135,20 @@ class BatchPreviewDialog(tk.Toplevel):
 
         # Column headers
         headers = {
-            'original': 'Original Name',
-            'new': 'New Name',
+            'filename': 'Filename',
             'status': 'Status'
         }
 
         # Calculate max width for each column
         col_widths = {}
-        for col in ('original', 'new', 'status'):
+        for col in ('filename', 'status'):
             # Start with header width
             max_width = tree_font.measure(headers[col]) + padding
 
             # Check all rows
             for item in self.tree.get_children():
                 values = self.tree.item(item, 'values')
-                col_idx = {'original': 0, 'new': 1, 'status': 2}[col]
+                col_idx = {'filename': 0, 'status': 1}[col]
                 text = str(values[col_idx]) if col_idx < len(values) else ''
                 text_width = tree_font.measure(text) + padding
                 max_width = max(max_width, text_width)

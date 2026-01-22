@@ -41,19 +41,17 @@ class ExifPreviewDialog(tk.Toplevel):
         main_frame.pack(fill='both', expand=True)
 
         # Treeview with columns
-        columns = ('filename', 'new_filename', 'divesite', 'latitude', 'longitude', 'maps')
+        columns = ('filename', 'divesite', 'latitude', 'longitude', 'maps')
         self.tree = ttk.Treeview(main_frame, columns=columns, show='headings', height=15)
 
-        self.tree.heading('filename', text='Current Filename')
-        self.tree.heading('new_filename', text='New Filename')
+        self.tree.heading('filename', text='Filename')
         self.tree.heading('divesite', text='Divesite')
         self.tree.heading('latitude', text='Latitude')
         self.tree.heading('longitude', text='Longitude')
         self.tree.heading('maps', text='Maps')
 
         # Initial minimal widths - will be auto-fitted after populating
-        self.tree.column('filename', width=200, minwidth=100)
-        self.tree.column('new_filename', width=200, minwidth=100)
+        self.tree.column('filename', width=300, minwidth=150)
         self.tree.column('divesite', width=150, minwidth=80)
         self.tree.column('latitude', width=100, minwidth=60)
         self.tree.column('longitude', width=100, minwidth=60)
@@ -132,16 +130,17 @@ class ExifPreviewDialog(tk.Toplevel):
             error = mapping.get('error')
 
             if error:
-                # Error row
+                # Error row - show original filename
                 self.tree.insert('', 'end',
-                    values=(filename, '-', error, '-', '-', '-'),
+                    values=(filename, error, '-', '-', '-'),
                     tags=('error',))
             else:
-                # Valid row with coordinates
+                # Valid row with coordinates - show new filename
+                filename_display = new_filename if new_filename else filename
                 lat_str = f"{lat:.6f}" if lat is not None else '-'
                 lon_str = f"{lon:.6f}" if lon is not None else '-'
                 self.tree.insert('', 'end',
-                    values=(filename, new_filename, site_name, lat_str, lon_str, 'Open'),
+                    values=(filename_display, site_name, lat_str, lon_str, 'Open'),
                     tags=('ok',))
 
     def _on_tree_click(self, event):
@@ -153,7 +152,7 @@ class ExifPreviewDialog(tk.Toplevel):
 
         # Get the column that was clicked
         column = self.tree.identify_column(event.x)
-        if column != '#6':  # Maps column is the 6th column
+        if column != '#5':  # Maps column is now the 5th column
             return
 
         # Get the clicked item
@@ -163,13 +162,16 @@ class ExifPreviewDialog(tk.Toplevel):
 
         # Find the corresponding mapping
         item_values = self.tree.item(item, 'values')
-        if len(item_values) < 6 or item_values[5] != 'Open':
+        if len(item_values) < 5 or item_values[4] != 'Open':
             return
 
-        # Find the mapping with matching filename
+        # Find the mapping with matching filename (could be original or new)
         filename = item_values[0]
         for mapping in self.file_mappings:
-            if mapping.get('filename') == filename and not mapping.get('error'):
+            # Match against both original filename and new filename
+            original_filename = mapping.get('filename', '')
+            new_filename = mapping.get('new_filename', '')
+            if (filename == original_filename or filename == new_filename) and not mapping.get('error'):
                 lat = mapping.get('lat')
                 lon = mapping.get('lon')
                 if lat is not None and lon is not None:
@@ -188,8 +190,7 @@ class ExifPreviewDialog(tk.Toplevel):
 
         # Column headers
         headers = {
-            'filename': 'Current Filename',
-            'new_filename': 'New Filename',
+            'filename': 'Filename',
             'divesite': 'Divesite',
             'latitude': 'Latitude',
             'longitude': 'Longitude',
@@ -198,15 +199,15 @@ class ExifPreviewDialog(tk.Toplevel):
 
         # Calculate max width for each column
         col_widths = {}
-        for col in ('filename', 'new_filename', 'divesite', 'latitude', 'longitude', 'maps'):
+        for col in ('filename', 'divesite', 'latitude', 'longitude', 'maps'):
             # Start with header width
             max_width = tree_font.measure(headers[col]) + padding
 
             # Check all rows
             for item in self.tree.get_children():
                 values = self.tree.item(item, 'values')
-                col_idx = {'filename': 0, 'new_filename': 1, 'divesite': 2,
-                          'latitude': 3, 'longitude': 4, 'maps': 5}[col]
+                col_idx = {'filename': 0, 'divesite': 1,
+                          'latitude': 2, 'longitude': 3, 'maps': 4}[col]
                 text = str(values[col_idx]) if col_idx < len(values) else ''
                 text_width = tree_font.measure(text) + padding
                 max_width = max(max_width, text_width)

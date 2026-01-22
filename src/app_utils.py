@@ -111,3 +111,37 @@ def clear_data_files():
         logger.info(f"Cleared all data files in {data_dir}")
     else:
         logger.warning(f"Data directory {data_dir} does not exist or is not a directory.")
+
+def get_filename_diff(original: str, new: str) -> tuple[str, str, str]:
+    """Calculate common prefix, changed part, and common suffix between two filenames.
+
+    Args:
+        original: Original filename
+        new: New filename
+
+    Returns:
+        Tuple of (prefix, changed_middle, suffix)
+        Example: ('IMG', '001' -> 'ABC_Site_001') returns ('', 'ABC_Site_', '001')
+    """
+    # Find common prefix
+    prefix_len = 0
+    min_len = min(len(original), len(new))
+    for i in range(min_len):
+        if original[i] == new[i]:
+            prefix_len += 1
+        else:
+            break
+
+    # Find common suffix (search from end)
+    suffix_len = 0
+    for i in range(1, min_len - prefix_len + 1):
+        if original[-i] == new[-i]:
+            suffix_len += 1
+        else:
+            break
+
+    prefix = new[:prefix_len]
+    suffix = new[-suffix_len:] if suffix_len > 0 else ''
+    changed_middle = new[prefix_len:len(new) - suffix_len] if suffix_len > 0 else new[prefix_len:]
+
+    return (prefix, changed_middle, suffix)

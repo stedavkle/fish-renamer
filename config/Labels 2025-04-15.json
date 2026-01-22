@@ -67,5 +67,9 @@
       "team": "interspecific team",
       "warn": "warning",
       "yawn": "yawning"
+    },
+    "Camera": {
+      "S-A7IV": "Sony A7IV",
+      "O-tg6": "Olympus TG6"
     }
   }

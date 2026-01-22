@@ -67,7 +67,7 @@ class FilenameAssembler:
             filenames: List of Basic format filenames to analyze
 
         Returns:
-            Tuple of (is_same_flags, common_values) as numpy arrays with 13 elements
+            Tuple of (is_same_flags, common_values) as numpy arrays with 14 elements
             to match the Identity format structure (first 7 are None/False for taxonomy)
 
         Raises:
@@ -80,9 +80,13 @@ class FilenameAssembler:
         for filename in filenames:
             basename = os.path.basename(os.path.splitext(filename)[0])
 
-            # Parse Basic format: AuthorCode_SiteString_Date_Time_Activity_OriginalName
+            # Remove _G suffix if present
+            if basename.endswith('_G'):
+                basename = basename[:-2]
+
+            # Parse Basic format: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
             parts = basename.split('_')
-            if len(parts) < 6:
+            if len(parts) < 7:
                 raise ValueError(f"Invalid basic format: '{basename}'")
 
             author_code = parts[0]
@@ -90,24 +94,25 @@ class FilenameAssembler:
             date = parts[2]
             time = parts[3]
             activity = parts[4]
-            original_name = '_'.join(parts[5:])  # Rest is original name
+            camera = parts[5]
+            original_name = '_'.join(parts[6:])  # Rest is original name
 
-            # Create tuple matching Identity format structure (13 elements)
-            # [0-6: taxonomy (None), 7: author, 8: site, 9: date, 10: time, 11: activity, 12: original]
+            # Create tuple matching Identity format structure (14 elements)
+            # [0-6: taxonomy (None), 7: author, 8: site, 9: date, 10: time, 11: activity, 12: camera, 13: original]
             parsed = (None, None, None, None, None, None, None,
-                     author_code, site_string, date, time, activity, original_name)
+                     author_code, site_string, date, time, activity, camera, original_name)
             parsed_info.append(parsed)
 
         try:
             info = np.array(parsed_info, dtype=object)
-            is_same = np.array([False] * 13, dtype=bool)
+            is_same = np.array([False] * 14, dtype=bool)
 
             # Check which fields are the same across all files (skip taxonomy fields 0-6)
-            for i in range(7, 13):
+            for i in range(7, 14):
                 if all(info[j][i] == info[0][i] for j in range(len(info))):
                     is_same[i] = True
 
-            values = np.array([info[0][i] if is_same[i] else None for i in range(13)], dtype=object)
+            values = np.array([info[0][i] if is_same[i] else None for i in range(14)], dtype=object)
             return is_same, values
         except (IndexError, ValueError) as e:
             logger.error(f"Error analyzing basic files for editing: {e}")
@@ -121,9 +126,9 @@ class FilenameAssembler:
         """Match identity filename pattern.
 
         Returns match object with groups:
-        0: Family, 1: Genus, 2: species, 3: confidence, 4: phase,
-        5: colour, 6: behaviour, 7: author, 8: site, 9: date,
-        10: time, 11: activity, 12: original name
+        1: Family, 2: Genus, 3: species, 4: confidence, 5: phase,
+        6: colour, 7: behaviour, 8: author, 9: site, 10: date,
+        11: time, 12: activity, 13: camera, 14: original name
         """
         return PATTERN_IDENTITY_FILENAME.match(filename)
 
@@ -132,7 +137,7 @@ class FilenameAssembler:
         return PATTERN_DATETIME_IN_FILENAME.match(filename)
 
     def assemble_basic_filename(self, original_filename: str, file_date: str, author_name: str,
-                                site_tuple: Tuple[str, str], activity: str) -> Optional[str]:
+                                site_tuple: Tuple[str, str], activity: str, camera: str) -> Optional[str]:
         """Assembles the initial filename with metadata like author, site, and date.
 
         Args:
@@ -141,6 +146,7 @@ class FilenameAssembler:
             author_name: Full name of photographer
             site_tuple: Tuple of (area, site)
             activity: Activity type
+            camera: Camera abbreviation (e.g., 'S-A7IV')
 
         Returns:
             Assembled filename, or None if already processed or missing required data
@@ -160,19 +166,20 @@ class FilenameAssembler:
         site_string = self.data.get_divesite_string(area, site)
 
         # Check all required fields are present
-        if not all([author_code, site_string, file_date, activity]):
+        if not all([author_code, site_string, file_date, activity, camera]):
             missing = []
             if not author_code: missing.append('author_code')
             if not site_string: missing.append('site_string')
             if not file_date: missing.append('file_date')
             if not activity: missing.append('activity')
+            if not camera: missing.append('camera')
             logger.warning(f"Missing essential info for basic rename: {', '.join(missing)}")
             return None
 
         # Sanitize original name by removing underscores
         sanitized_original = original_filename.replace('_', '')
 
-        return f"{author_code}_{site_string}_{file_date}_{activity}_{sanitized_original}"
+        return f"{author_code}_{site_string}_{file_date}_{activity}_{camera}_{sanitized_original}"
 
     def assemble_identity_filename(self, existing_filename: str, family: str, genus: str,
                                    species: str, confidence: str, phase: str, colour: str,
@@ -227,14 +234,14 @@ class FilenameAssembler:
 
         return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour_code}_{behaviour_code}_{base_name}"
     
-    def assemble_edited_filename(self, family: str, genus: str, species: str, confidence: str, phase: str, colour: str, behaviour: str, author_code: str, site_string: str, date: str, time: str, activity: str, filename: str, extension: str) -> str:
+    def assemble_edited_filename(self, family: str, genus: str, species: str, confidence: str, phase: str, colour: str, behaviour: str, author_code: str, site_string: str, date: str, time: str, activity: str, camera: str, filename: str, extension: str) -> str:
         """
         Constructs a new filename by replacing edited fields and keeping original ones.
         """
 
-        return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{author_code}_{site_string}_{date}_{time}_{activity}_{filename}{extension}"
+        return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{author_code}_{site_string}_{date}_{time}_{activity}_{camera}_{filename}{extension}"
 
-    def assemble_edited_basic_filename(self, author_code: str, site_string: str, date: str, time: str, activity: str, filename: str, extension: str) -> str:
+    def assemble_edited_basic_filename(self, author_code: str, site_string: str, date: str, time: str, activity: str, camera: str, filename: str, extension: str) -> str:
         """
         Constructs a new Basic format filename by replacing edited fields and keeping original ones.
 
@@ -244,16 +251,17 @@ class FilenameAssembler:
             date: Date string (YYYY-MM-DD)
             time: Time string (HH-MM-SS)
             activity: Activity type
+            camera: Camera abbreviation (e.g., 'S-A7IV')
             filename: Original filename part
             extension: File extension
 
         Returns:
             Complete filename with extension
         """
-        return f"{author_code}_{site_string}_{date}_{time}_{activity}_{filename}{extension}"
+        return f"{author_code}_{site_string}_{date}_{time}_{activity}_{camera}_{filename}{extension}"
 
     def extract_site_string(self, filename: str) -> Optional[str]:
-        """Extract site string from Basic or Identify format filename.
+        """Extract site string from Basic or Identity format filename.
 
         Args:
             filename: Filename without extension
@@ -261,16 +269,19 @@ class FilenameAssembler:
         Returns:
             Site string (e.g., 'IDN-Bangka-BTI') or None if not found
         """
+        # Remove _G suffix if present
+        clean_filename = filename[:-2] if filename.endswith('_G') else filename
+
         # Try Identity format first (more specific)
-        match = PATTERN_IDENTITY_FILENAME.match(filename)
+        match = PATTERN_IDENTITY_FILENAME.match(clean_filename)
         if match:
             return match.group(9)  # Site string is group 9
 
         # Try Basic format
-        match = PATTERN_BASIC_FILENAME.match(filename)
+        match = PATTERN_BASIC_FILENAME.match(clean_filename)
         if match:
-            # Basic format: AuthorCode_SiteString_Date_Time_Activity_OriginalName
-            parts = filename.split('_')
+            # Basic format: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
+            parts = clean_filename.split('_')
             if len(parts) >= 2:
                 potential_site = parts[1]
                 # Validate site string format: XXX-Name-XXX

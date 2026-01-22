@@ -329,6 +329,7 @@ class MainWindow(TkinterDnD.Tk):
         ToolTip(self.cb_author, msg="Photographer who took the image")
         ToolTip(self.cb_site, msg="Dive site location")
         ToolTip(self.cb_activity, msg="Activity type (diving, snorkeling, etc.)")
+        ToolTip(self.cb_camera, msg="Camera model used to take the photo")
 
     def _setup_combobox_group(self, frame, configs):
         for config in configs:
@@ -363,7 +364,8 @@ class MainWindow(TkinterDnD.Tk):
         configs = [
             {'label': 'Photographer', 'var': 'cb_author', 'row': 4, 'col': 0, 'cmd': self._save_user_prefs},
             {'label': 'Site', 'var': 'cb_site', 'row': 4, 'col': 1, 'cmd': self._save_user_prefs},
-            {'label': 'Activity', 'var': 'cb_activity', 'row': 4, 'col': 2, 'cmd': self._save_user_prefs}
+            {'label': 'Activity', 'var': 'cb_activity', 'row': 4, 'col': 2, 'cmd': self._save_user_prefs},
+            {'label': 'Camera', 'var': 'cb_camera', 'row': 4, 'col': 3, 'cmd': self._save_user_prefs}
         ]
         self._setup_combobox_group(self.bottom_frame, configs)
 
@@ -433,17 +435,6 @@ class MainWindow(TkinterDnD.Tk):
             "4. Confirm to write GPS coordinates to images"
         )
         ttk.Label(instructions_frame, text=instructions_text, justify='left').pack(anchor='w')
-
-        # Camera model selection
-        camera_frame = ttk.LabelFrame(self.exif_frame, text="Camera Model (Optional)", padding=10)
-        camera_frame.pack(fill='x', padx=5, pady=5)
-
-        camera_label = ttk.Label(camera_frame, text="Select camera model to include in filename:")
-        camera_label.pack(anchor='w', pady=(0, 5))
-
-        self.cb_camera_model = ttk.Combobox(camera_frame, values=['', 'S-A7IV'], state='readonly', width=20)
-        self.cb_camera_model.set('')  # Default to empty
-        self.cb_camera_model.pack(anchor='w')
 
     def _update_exiftool_status(self):
         """Update the ExifTool status display."""
@@ -541,10 +532,19 @@ class MainWindow(TkinterDnD.Tk):
         activity_values = [v for v in self.data.get_unique_values('activity', 'activities_df') if v]
         self.cb_activity['values'] = [DEFAULT_ACTIVITY_TEXT] + activity_values
 
+        # Load camera values
+        camera_values = self.data.get_camera_models()
+        self.cb_camera['values'] = camera_values
+        if camera_values:
+            default_camera = camera_values[0]
+        else:
+            default_camera = ''
+
         # Restore selections from config
         self.cb_author.set(self.config_manager.get_user_pref('author', DEFAULT_PHOTOGRAPHER_TEXT))
         self.cb_site.set(self.config_manager.get_user_pref('site', DEFAULT_SITE_TEXT))
         self.cb_activity.set(self.config_manager.get_user_pref('activity', DEFAULT_ACTIVITY_TEXT))
+        self.cb_camera.set(self.config_manager.get_user_pref('camera', default_camera))
 
         # Fill tree with all fish initially
         self.fill_tree(self.data.get_all_fish().values.tolist())
@@ -627,15 +627,22 @@ class MainWindow(TkinterDnD.Tk):
             self._warn("Files have no common editable information.")
             return
 
-        # Map the 13-element array to the 10 UI controls
-        ui_flags = is_same[[0, 1, 2, 3, 4, 5, 6, 7, 8, 11]]
-        ui_values = values[[0, 1, 2, 3, 4, 5, 6, 7, 8, 11]]
+        # Map the 14-element array to the 11 UI controls
+        # [0-6: taxonomy, 7: author, 8: site, 9-10: date/time (not editable), 11: activity, 12: camera, 13: original (not editable)]
+        ui_flags = is_same[[0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12]]
+        ui_values = values[[0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12]]
 
         # Convert attribute abbreviations to labels (only for Identity format)
         if self.editing_format == 'identity':
             for i, field in zip([3, 4, 5, 6], ['Confidence', 'Phase', 'Colour', 'Behaviour']):
                 if ui_values[i] is not None:
                     ui_values[i] = self.data.labels[field][str(ui_values[i])]
+
+        # Convert camera abbreviation to full name
+        if ui_values[10] is not None:  # Camera is now at index 10
+            camera_full_name = self.data.get_camera_full_name(ui_values[10])
+            if camera_full_name:
+                ui_values[10] = camera_full_name
 
         self._toggle_checkboxes(*ui_flags)
         self._set_checkboxes(*ui_values)
@@ -646,9 +653,9 @@ class MainWindow(TkinterDnD.Tk):
         self._adjust_window_height()
 
     def _handle_basic_mode(self, files):
-        """Rename files with basic metadata (photographer, site, activity).
+        """Rename files with basic metadata (photographer, site, activity, camera).
 
-        Validates that photographer, site, and activity are selected, then
+        Validates that photographer, site, activity, and camera are selected, then
         renames each file with EXIF date and basic metadata.
 
         Args:
@@ -657,6 +664,7 @@ class MainWindow(TkinterDnD.Tk):
         author = self.cb_author.get()
         site_raw = self.cb_site.get()
         activity = self.cb_activity.get()
+        camera = self.cb_camera.get()
 
         # Validate selections
         if not author or author == DEFAULT_PHOTOGRAPHER_TEXT:
@@ -668,11 +676,20 @@ class MainWindow(TkinterDnD.Tk):
         if not activity or activity == DEFAULT_ACTIVITY_TEXT:
             self._warn("Please select an activity.")
             return
+        if not camera:
+            self._warn("Please select a camera model.")
+            return
+
+        # Get camera abbreviation for filename
+        camera_abbrev = self.data.get_camera_abbreviation(camera)
+        if not camera_abbrev:
+            self._warn("Invalid camera model.")
+            return
 
         site_tuple = tuple(site_raw.split(", ", 1))
 
         # Generate previews
-        previews = self._generate_previews_basic(files, author, site_tuple, activity)
+        previews = self._generate_previews_basic(files, author, site_tuple, activity, camera_abbrev)
 
         # Show preview dialog
         from .preview_dialog import BatchPreviewDialog
@@ -689,12 +706,12 @@ class MainWindow(TkinterDnD.Tk):
 
         renamed_count = 0
         for mapping in to_rename:
-            if self._rename_single_file_basic(mapping['path'], author, site_tuple, activity):
+            if self._rename_single_file_basic(mapping['path'], author, site_tuple, activity, camera_abbrev):
                 renamed_count += 1
 
         self._notice(f"{renamed_count}/{len(to_rename)} files renamed.")
 
-    def _generate_previews_basic(self, files, author, site_tuple, activity):
+    def _generate_previews_basic(self, files, author, site_tuple, activity, camera_abbrev):
         """Generate preview data for basic mode renames.
 
         Args:
@@ -702,6 +719,7 @@ class MainWindow(TkinterDnD.Tk):
             author: Photographer name
             site_tuple: (area, site) tuple
             activity: Activity type
+            camera_abbrev: Camera abbreviation (e.g., 'S-A7IV')
 
         Returns:
             List of dicts with keys: path, original, new, error
@@ -717,7 +735,7 @@ class MainWindow(TkinterDnD.Tk):
             if not file_date:
                 preview['error'] = 'No EXIF date'
             else:
-                new_name = self.assembler.assemble_basic_filename(name, file_date, author, site_tuple, activity)
+                new_name = self.assembler.assemble_basic_filename(name, file_date, author, site_tuple, activity, camera_abbrev)
                 if new_name:
                     preview['new'] = new_name + ext
                 else:
@@ -743,6 +761,11 @@ class MainWindow(TkinterDnD.Tk):
         phase = self.data.get_abbreviation_reverse("Phase", self.cb_phase.get())
         colour = self.data.get_abbreviation_reverse("Colour", self.cb_colour.get())
         behaviour = self.data.get_abbreviation_reverse("Behaviour", self.cb_behaviour.get())
+
+        # Validate that species is not set when genus is default
+        if genus == self.data.genus_default and species != self.data.species_default:
+            self._warn("Cannot set species when genus is on default. Please select a genus first.")
+            return
 
         # Generate previews
         previews = self._generate_previews_identify(
@@ -875,110 +898,38 @@ class MainWindow(TkinterDnD.Tk):
         else:
             self._notice(f"GPS written to {success_count}/{len(to_process)} files, {rename_count} renamed")
 
-    def _construct_gps_filename(self, filename_without_ext, camera_model=''):
-        """Construct new filename with GPS marker (_G_) and optional camera model.
+    def _construct_gps_filename(self, filename_without_ext):
+        """Construct filename with GPS marker at the end.
 
-        Inserts "_G_" (and camera model if provided) between activity and original filename.
-        If "_G_" already exists, updates or adds camera model as needed without duplicating.
+        New format:
+        - Identity: Family_Genus_Species_B_conf_phase_colour_behav_Author_Site_Date_Time_Activity_Camera_Filename_G
+        - Basic: Author_Site_Date_Time_Activity_Camera_Filename_G
+
+        If _G already exists at end, this is idempotent (no change).
 
         Args:
             filename_without_ext: Filename without extension
-            camera_model: Camera model string (optional)
 
         Returns:
-            New filename with GPS marker, or None if format is invalid
+            New filename with GPS marker at end, or None if format is invalid
         """
-        # Try to match identity format first
+        # Check if _G already exists at the end
+        if filename_without_ext.endswith('_G'):
+            return filename_without_ext  # Already has GPS marker
+
+        # Try Identity format first
         match = self.assembler.regex_match_identity(filename_without_ext)
         if match:
-            groups = match.groups()
-            # Groups: 0: Family, 1: Genus, 2: Species, 3: Confidence, 4: Phase,
-            #         5: Colour, 6: Behaviour, 7: Author, 8: Site, 9: Date,
-            #         10: Time, 11: Activity, 12: Original name
-            # NOTE: "_B_" literal separator exists between Species (2) and Confidence (3) but is not captured
+            # Simply append _G to end
+            return f"{filename_without_ext}_G"
 
-            family, genus, species = groups[0], groups[1], groups[2]
-            confidence, phase, colour, behaviour = groups[3], groups[4], groups[5], groups[6]
-            author, site, date, time = groups[7], groups[8], groups[9], groups[10]
-            activity = groups[11]
-            original_name = groups[12]
-
-            # Check if GPS marker already exists in original_name
-            # Format could be: G_cameramodel_filename or G_filename
-            name_parts = original_name.split('_')
-            if name_parts[0] == 'G':
-                # GPS marker already exists
-                if len(name_parts) >= 3 and name_parts[1] and name_parts[1][0].isupper():
-                    # Has camera model: G_cameramodel_filename
-                    actual_filename = '_'.join(name_parts[2:])
-
-                    if camera_model:
-                        # Replace with new camera model
-                        return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{author}_{site}_{date}_{time}_{activity}_G_{camera_model}_{actual_filename}"
-                    else:
-                        # Remove camera model (no camera selected)
-                        return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{author}_{site}_{date}_{time}_{activity}_G_{actual_filename}"
-                else:
-                    # No camera model: G_filename
-                    actual_filename = '_'.join(name_parts[1:])
-
-                    if camera_model:
-                        # Add camera model
-                        return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{author}_{site}_{date}_{time}_{activity}_G_{camera_model}_{actual_filename}"
-                    else:
-                        # Keep as is (no camera model in filename, none selected)
-                        return filename_without_ext
-            else:
-                # No GPS marker yet, add it
-                if camera_model:
-                    return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{author}_{site}_{date}_{time}_{activity}_G_{camera_model}_{original_name}"
-                else:
-                    return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour}_{behaviour}_{author}_{site}_{date}_{time}_{activity}_G_{original_name}"
-
-        # Try basic format
+        # Try Basic format
         match = self.assembler.regex_match_basic(filename_without_ext)
         if match:
-            # Basic format: AuthorCode_SiteString_Date_Time_Activity_OriginalName
-            # Or with GPS: AuthorCode_SiteString_Date_Time_Activity_G_CameraModel_OriginalName
-            parts = filename_without_ext.split('_')
-            if len(parts) >= 6:
-                parts_before_activity = parts[:4]  # AuthorCode, SiteString, Date, Time
-                activity = parts[4]
-                remaining_parts = parts[5:]  # Everything after activity
+            # Simply append _G to end
+            return f"{filename_without_ext}_G"
 
-                # Check if GPS marker exists
-                if remaining_parts and remaining_parts[0] == 'G':
-                    # GPS marker already exists
-                    if len(remaining_parts) >= 3 and remaining_parts[1] and remaining_parts[1][0].isupper():
-                        # Has camera model: G_cameramodel_filename
-                        actual_filename = '_'.join(remaining_parts[2:])
-
-                        if camera_model:
-                            # Replace with new camera model
-                            new_parts = parts_before_activity + [activity, 'G', camera_model, actual_filename]
-                        else:
-                            # Remove camera model (no camera selected)
-                            new_parts = parts_before_activity + [activity, 'G', actual_filename]
-                    else:
-                        # No camera model: G_filename
-                        actual_filename = '_'.join(remaining_parts[1:])
-
-                        if camera_model:
-                            # Add camera model
-                            new_parts = parts_before_activity + [activity, 'G', camera_model, actual_filename]
-                        else:
-                            # Keep as is (no camera model in filename, none selected)
-                            return filename_without_ext
-                else:
-                    # No GPS marker yet, add it
-                    original_name = '_'.join(remaining_parts)
-                    if camera_model:
-                        new_parts = parts_before_activity + [activity, 'G', camera_model, original_name]
-                    else:
-                        new_parts = parts_before_activity + [activity, 'G', original_name]
-
-                return '_'.join(new_parts)
-
+        # Invalid format
         return None
 
     def _generate_previews_exif(self, files):
@@ -993,9 +944,6 @@ class MainWindow(TkinterDnD.Tk):
         Returns:
             List of dicts with keys: path, filename, site_string, site_name, lat, lon, new_filename, error
         """
-        # Get camera model selection
-        camera_model = self.cb_camera_model.get() if hasattr(self, 'cb_camera_model') else ''
-
         previews = []
         for file_path in files:
             filename = os.path.basename(file_path)
@@ -1052,7 +1000,7 @@ class MainWindow(TkinterDnD.Tk):
             preview['lon'] = lon
 
             # Generate new filename with GPS marker
-            new_filename_body = self._construct_gps_filename(name, camera_model)
+            new_filename_body = self._construct_gps_filename(name)
             if new_filename_body:
                 preview['new_filename'] = new_filename_body + ext
             else:
@@ -1064,7 +1012,7 @@ class MainWindow(TkinterDnD.Tk):
 
         return previews
 
-    def _rename_single_file_basic(self, file_path, author, site_tuple, activity):
+    def _rename_single_file_basic(self, file_path, author, site_tuple, activity, camera_abbrev):
         """Rename a single file with basic metadata.
 
         Returns:
@@ -1080,7 +1028,7 @@ class MainWindow(TkinterDnD.Tk):
 
             file_date = self.exif.get_creation_date_str(file_path)
             new_filename_body = self.assembler.assemble_basic_filename(
-                original_name, file_date, author, site_tuple, activity
+                original_name, file_date, author, site_tuple, activity, camera_abbrev
             )
 
             if not new_filename_body:
@@ -1275,22 +1223,22 @@ class MainWindow(TkinterDnD.Tk):
             self.exif_frame.grid_remove()
 
         if is_basic:
-            self._toggle_checkboxes(False, False, False, False, False, False, False, True, True, True)
+            self._toggle_checkboxes(False, False, False, False, False, False, False, True, True, True, True)
             self._toggle_tree(False)
             self.bt_rename.grid_remove()
             self.bottom_frame.grid()
         elif is_identify:
-            self._toggle_checkboxes(True, True, True, True, True, True, True, False, False, False)
+            self._toggle_checkboxes(True, True, True, True, True, True, True, False, False, False, False)
             self._toggle_tree(True)
             self.bt_rename.grid_remove()
             self.bottom_frame.grid()
         elif is_edit:
-            self._toggle_checkboxes(False, False, False, False, False, False, False, False, False, False)
+            self._toggle_checkboxes(False, False, False, False, False, False, False, False, False, False, False)
             self._toggle_tree(True)
             self.bt_rename.grid()
             self.bottom_frame.grid()
         elif is_meta:
-            self._toggle_checkboxes(False, False, False, False, False, False, False, False, False, False)
+            self._toggle_checkboxes(False, False, False, False, False, False, False, False, False, False, False)
             self._toggle_tree(False)
             self.bt_rename.grid_remove()
             self.bottom_frame.grid_remove()
@@ -1302,7 +1250,7 @@ class MainWindow(TkinterDnD.Tk):
             self._reset_info()
         self._notice(mode_hints[mode])
     
-    def _toggle_checkboxes(self, family, genus, species, confidence, phase, colour, behaviour, author, site, activity):
+    def _toggle_checkboxes(self, family, genus, species, confidence, phase, colour, behaviour, author, site, activity, camera):
         """Show or hide comboboxes and their labels based on boolean flags.
 
         Args:
@@ -1316,6 +1264,7 @@ class MainWindow(TkinterDnD.Tk):
             author: Show/hide author combobox
             site: Show/hide site combobox
             activity: Show/hide activity combobox
+            camera: Show/hide camera combobox
         """
         self._toggle_widget(self.cb_family, self.cb_family_label, family)
         self._toggle_widget(self.cb_genus, self.cb_genus_label, genus)
@@ -1327,6 +1276,7 @@ class MainWindow(TkinterDnD.Tk):
         self._toggle_widget(self.cb_author, self.cb_author_label, author)
         self._toggle_widget(self.cb_site, self.cb_site_label, site)
         self._toggle_widget(self.cb_activity, self.cb_activity_label, activity)
+        self._toggle_widget(self.cb_camera, self.cb_camera_label, camera)
         # Show/hide Google Maps link with site field
         if site:
             self.link.grid()
@@ -1361,7 +1311,7 @@ class MainWindow(TkinterDnD.Tk):
             self.upper_frame.grid_remove()
             self.middle_frame.grid_remove()
 
-    def _set_checkboxes(self, family, genus, species, confidence, phase, colour, behaviour, author, site, activity):
+    def _set_checkboxes(self, family, genus, species, confidence, phase, colour, behaviour, author, site, activity, camera):
         """Set combobox values from parsed filename data.
 
         Used in Edit mode to populate comboboxes with values extracted from
@@ -1378,6 +1328,7 @@ class MainWindow(TkinterDnD.Tk):
             author: Author code to set (converted to full name)
             site: Site code to set (converted to formatted string)
             activity: Activity to set
+            camera: Camera full name to set
         """
         if family:
             self.cb_family.set(family)
@@ -1394,6 +1345,7 @@ class MainWindow(TkinterDnD.Tk):
         if author: self.cb_author.set(self.data.get_user_name(author))
         if site: self.cb_site.set(self.data.get_divesite_area_site(site))
         if activity: self.cb_activity.set(activity)
+        if camera: self.cb_camera.set(camera)
 
     def _row_selected(self, event):
         """Handle treeview row selection.
@@ -1422,6 +1374,9 @@ class MainWindow(TkinterDnD.Tk):
         fam_gen_df = self.data.filter_fish({'Family': fam, 'Genus': gen})
         self.cb_genus['values'] = [self.data.genus_default] + sorted(fam_df['Genus'].unique())
         self.cb_species['values'] = [self.data.species_default] + sorted(fam_gen_df['Species'].unique())
+
+        # Enable species dropdown when row selected
+        self.cb_species.config(state='readonly')
 
         # Show selected species in status bar
         self._notice(f"Selected: {gen} {spec} ({common_name})")
@@ -1474,12 +1429,16 @@ class MainWindow(TkinterDnD.Tk):
         family = self.cb_family.get()
         if family == self.data.family_default:
             filtered_df = self.data.filter_fish()
+            # Disable species when family is default
+            self.cb_species.set(self.data.species_default)
+            self.cb_species.config(state='disabled')
         else:
             filtered_df = self.data.filter_fish({'Family': family})
         self.cb_genus['values'] = [self.data.genus_default] + sorted(filtered_df['Genus'].unique())
         self.cb_genus.set(self.data.genus_default)
         self.cb_species['values'] = [self.data.species_default] + sorted(filtered_df['Species'].unique())
-        self.cb_species.set(self.data.species_default)
+        if family != self.data.family_default:
+            self.cb_species.set(self.data.species_default)
         self.fill_tree(filtered_df.values.tolist())
 
         if family == self.data.family_default: self.selection_confident(False)
@@ -1496,14 +1455,20 @@ class MainWindow(TkinterDnD.Tk):
         family = self.cb_family.get()
         genus = self.cb_genus.get()
 
+        # Reset and disable species when genus is default
         if genus == self.data.genus_default:
             filtered_df = self.data.filter_fish({'Family': family})
             self.cb_genus['values'] = [self.data.genus_default] + sorted(filtered_df['Genus'].unique())
             self.cb_genus.set(self.data.genus_default)
+            self.cb_species.set(self.data.species_default)
+            self.cb_species.config(state='disabled')
         else:
             filtered_df = self.data.filter_fish({'Family': family, 'Genus': genus})
+            self.cb_species.config(state='readonly')
+
         self.cb_species['values'] = [self.data.species_default] + sorted(filtered_df['Species'].unique())
-        self.cb_species.set(self.data.species_default)
+        if genus != self.data.genus_default:
+            self.cb_species.set(self.data.species_default)
         self.fill_tree(filtered_df.values.tolist())
 
         if genus == self.data.genus_default: self.selection_confident(False)
@@ -1715,19 +1680,23 @@ class MainWindow(TkinterDnD.Tk):
                     edited_fields['date'],
                     edited_fields['time'],
                     edited_fields['activity'],
+                    edited_fields['camera'],
                     edited_fields['filename'],
                     extension
                 )
 
             elif self.editing_format == 'basic':
-                # Parse Basic format filename
-                parts = basename.split('_')
-                if len(parts) < 6:
+                # Parse Basic format filename: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
+                # Remove _G suffix if present
+                clean_basename = basename[:-2] if basename.endswith('_G') else basename
+                parts = clean_basename.split('_')
+                if len(parts) < 7:
                     return False
 
-                # Create info tuple matching Identity format structure
+                # Create info tuple matching Identity format structure (14 elements)
+                # [0-6: taxonomy (None), 7: author, 8: site, 9: date, 10: time, 11: activity, 12: camera, 13: original]
                 info = (None, None, None, None, None, None, None,
-                       parts[0], parts[1], parts[2], parts[3], parts[4], '_'.join(parts[5:]))
+                       parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], '_'.join(parts[6:]))
 
                 # Build new filename from edited/original fields
                 edited_fields = self._collect_edited_fields(info)
@@ -1738,6 +1707,7 @@ class MainWindow(TkinterDnD.Tk):
                     edited_fields['date'],
                     edited_fields['time'],
                     edited_fields['activity'],
+                    edited_fields['camera'],
                     edited_fields['filename'],
                     extension
                 )
@@ -1801,10 +1771,10 @@ class MainWindow(TkinterDnD.Tk):
         Returns:
             dict: Dictionary of field names to values
         """
-        # Field indices in parsed info tuple:
+        # Field indices in parsed info tuple (14 elements):
         # 0: family, 1: genus, 2: species, 3: confidence, 4: phase,
         # 5: colour, 6: behaviour, 7: author, 8: site, 9: date,
-        # 10: time, 11: activity, 12: original name
+        # 10: time, 11: activity, 12: camera, 13: original name
 
         fields = {}
 
@@ -1818,7 +1788,7 @@ class MainWindow(TkinterDnD.Tk):
         fields['phase'] = self.data.get_abbreviation_reverse('Phase', self.cb_phase.get()) if self.fields_to_edit[4] else info[4]
         fields['colour'] = self.data.get_abbreviation_reverse('Colour', self.cb_colour.get()) if self.fields_to_edit[5] else info[5]
         fields['behaviour'] = self.data.get_abbreviation_reverse('Behaviour', self.cb_behaviour.get()) if self.fields_to_edit[6] else info[6]
-        
+
 
         # # Colour and behaviour (may need reverse lookup for abbreviations)
         # if self.fields_to_edit[5]:
@@ -1861,8 +1831,15 @@ class MainWindow(TkinterDnD.Tk):
         # Activity field
         fields['activity'] = self.cb_activity.get() if self.fields_to_edit[11] else info[11]
 
+        # Camera field
+        if self.fields_to_edit[12]:
+            camera = self.cb_camera.get()
+            fields['camera'] = self.data.get_camera_abbreviation(camera)
+        else:
+            fields['camera'] = info[12]
+
         # Original filename (never edited)
-        fields['filename'] = info[12]
+        fields['filename'] = info[13]
 
         return fields
 
@@ -1874,4 +1851,4 @@ class MainWindow(TkinterDnD.Tk):
         """
         self._reset_info()
         self.editing_files = []
-        self._toggle_checkboxes(False, False, False, False, False, False, False, False, False, False)
+        self._toggle_checkboxes(False, False, False, False, False, False, False, False, False, False, False)
