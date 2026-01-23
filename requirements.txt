@@ -6,3 +6,5 @@ numpy
 imageio
 requests
 selenium
+tkinter-tooltip
+pillow-heif

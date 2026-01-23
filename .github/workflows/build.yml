@@ -65,7 +65,7 @@ jobs:
       
       - name: Build with Nuitka
         run: |
-          python -m nuitka --onefile --output-dir=distx64nuitka --output-filename=daves-fish-renamer --windows-icon-from-ico=config/icon.png --include-data-dir="config=config" --enable-plugin=tk-inter --disable-ccache --windows-company-name="Dave" --windows-product-name="FishRenamer" --windows-file-version=${{ env.APP_VERSION }} --windows-product-version=${{ env.APP_VERSION }} main.py
+          python -m nuitka --onefile --output-dir=distx64nuitka --output-filename=daves-fish-renamer --windows-icon-from-ico=config/icon.png --include-data-dir="config=config" --enable-plugin=tk-inter --enable-plugin=numpy --include-package=pandas._libs --disable-ccache --windows-company-name="Dave" --windows-product-name="FishRenamer" --windows-file-version=${{ env.APP_VERSION }} --windows-product-version=${{ env.APP_VERSION }} main.py
             
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
@@ -109,13 +109,12 @@ jobs:
       # 2. Use the environment variable in the Nuitka command
       - name: Build with Nuitka
         run: |
-          python -m nuitka --standalone --macos-create-app-bundle --macos-app-icon=config/icon.png --enable-plugin=tk-inter --include-data-dir="config=config" --disable-ccache --output-dir=distmipsnuitka --remove-output --macos-app-name=FishRenamer --macos-app-version=${{ env.APP_VERSION }} --macos-signed-app-name=de.dave.FishRenamer --output-filename=daves-fish-renamer ./main.py
+          python -m nuitka --standalone --macos-create-app-bundle --macos-app-icon=config/icon.png --enable-plugin=tk-inter --enable-plugin=numpy --include-package=pandas._libs --include-data-dir="config=config" --disable-ccache --output-dir=distmipsnuitka --remove-output --macos-app-name=FishRenamer --macos-app-version=${{ env.APP_VERSION }} --macos-signed-app-name=de.dave.FishRenamer --output-filename=daves-fish-renamer ./main.py
 
       - name: Zip macOS app
         run: |
           cd distmipsnuitka
-          # Note: Nuitka creates the .app based on --macos-app-name
-          mv FishRenamer.app daves-fish-renamer.app
+          mv main.app daves-fish-renamer.app
           tar -czf daves-fish-renamer.app.tar.gz daves-fish-renamer.app
           cd ..
       

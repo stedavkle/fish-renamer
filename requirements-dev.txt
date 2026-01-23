@@ -8,3 +8,5 @@ imageio
 pyinstaller
 nuitka
 selenium
+tkinter-tooltip
+pillow-heif
