@@ -19,6 +19,7 @@ import threading
 import atexit
 from pathlib import Path
 from typing import Optional, Tuple, List, Dict
+from src import app_utils
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,7 @@ class ExifToolHandler:
             app_dir / "exiftool" / "exiftool.exe",  # Windows
             app_dir / "exiftool" / "exiftool",  # Mac/Linux
             app_dir / "exiftool.exe",  # Windows in root
+            app_utils.get_data_path() / "exiftool" / "exiftool.exe",  # In app data
         ]
 
         for local_path in local_paths:
@@ -295,7 +297,7 @@ class ExifToolHandler:
             return False, "Automatic installation is only supported on Windows. Please install manually."
 
         try:
-            app_dir = Path(__file__).parent.parent
+            app_dir = app_utils.get_data_path()
             install_dir = app_dir / "exiftool"
             install_dir.mkdir(exist_ok=True)
 
