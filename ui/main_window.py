@@ -187,9 +187,10 @@ class MainWindow(TkinterDnD.Tk):
 
     def _adjust_window_height(self):
         """Adjust window height to fit all visible content without compressing the tree."""
+        # Force geometry recalculation by temporarily allowing window to shrink
         self.update_idletasks()
 
-        # Determine if tree should be visible based on mode (not winfo_viewable which can lag)
+        # Determine if tree should be visible based on mode
         mode = self.mode.get()
         tree_visible = mode in ('Identify', 'Edit')
         exif_panel_visible = mode == 'Meta'
@@ -197,35 +198,43 @@ class MainWindow(TkinterDnD.Tk):
         # Calculate required height based on visible elements
         required_height = 0
 
-        # Tabs and status bar
+        # Tabs and status bar (always visible)
         required_height += self.tabs_frame.winfo_reqheight()
         required_height += self.status_frame.winfo_reqheight()
 
         # Tree area (if visible in current mode)
         if tree_visible:
-            # Use the tree's requested height which respects the height parameter
             required_height += self.upper_frame.winfo_reqheight()
-            # Search field
             required_height += self.middle_frame.winfo_reqheight()
 
         # EXIF panel (if visible)
         if exif_panel_visible and hasattr(self, 'exif_frame'):
             required_height += self.exif_frame.winfo_reqheight()
 
-        # Bottom controls (if not in EXIF mode)
+        # Bottom controls - calculate based on visible rows per mode
         if not exif_panel_visible:
-            required_height += self.bottom_frame.winfo_reqheight()
+            # Each row is approximately 30px (label) + 30px (combobox) + padding
+            row_height = 35
+            if mode == 'Basic':
+                # Basic mode: Author/Site/Activity/Camera (1 label row + 1 combo row) + Maps link
+                required_height += row_height * 3
+            elif mode == 'Identify':
+                # Identify mode: Taxonomy (2 rows) + Attributes (2 rows)
+                required_height += row_height * 4
+            elif mode == 'Edit':
+                # Edit mode: Similar to Identify when populated
+                required_height += row_height * 4
 
-        # Add some padding
-        required_height += 20
+        # Add padding
+        required_height += 30
 
         # Get current width
         current_width = self.winfo_width()
         if current_width < 800:
             current_width = 800
 
-        # Set geometry, ensuring minimum height
-        min_height = 300
+        # Set geometry with appropriate minimum
+        min_height = 200 if mode == 'Basic' else 300
         final_height = max(required_height, min_height)
 
         self.geometry(f"{current_width}x{final_height}")
@@ -242,8 +251,8 @@ class MainWindow(TkinterDnD.Tk):
                 )
             else:
                 btn.config(
-                    bg='#9E9E9E',  # Grey for inactive tabs
-                    fg='#EEEEEE',
+                    bg='#90D5FF',  # Light grey for inactive tabs (better contrast)
+                    fg='#424242',  # Dark text for visibility
                     relief='flat'
                 )
 
@@ -283,6 +292,8 @@ class MainWindow(TkinterDnD.Tk):
         self.search_field.bind("<FocusIn>", self._on_search_focus_in)
         self.search_field.bind("<FocusOut>", self._on_search_focus_out)
         self.search_field.bind("<Return>", self.search)
+        self.search_field.bind("<KeyRelease>", self._on_search_key_release)
+        self._search_after_id = None
 
     def _on_search_focus_in(self, event):
         """Clear placeholder text when search field gains focus."""
@@ -295,6 +306,21 @@ class MainWindow(TkinterDnD.Tk):
         if not self.search_field.get():
             self.search_field.insert(0, SEARCH_PLACEHOLDER)
             self.search_field.config(foreground='gray')
+
+    def _on_search_key_release(self, event):
+        """Handle key release in search field with debounce for auto-filtering."""
+        # Ignore modifier keys and navigation keys
+        if event.keysym in ('Shift_L', 'Shift_R', 'Control_L', 'Control_R',
+                           'Alt_L', 'Alt_R', 'Return', 'Tab', 'Escape',
+                           'Up', 'Down', 'Left', 'Right', 'Home', 'End'):
+            return
+
+        # Cancel any pending search
+        if self._search_after_id:
+            self.after_cancel(self._search_after_id)
+
+        # Schedule search after 300ms of no typing
+        self._search_after_id = self.after(300, lambda: self.search(None))
 
     def _setup_treeview_and_scrollbars(self):
         # Set height=10 to ensure minimum visible rows
@@ -741,7 +767,12 @@ class MainWindow(TkinterDnD.Tk):
             List of dicts with keys: path, original, new, error
         """
         previews = []
-        for file_path in files:
+        total = len(files)
+        for i, file_path in enumerate(files):
+            # Update status bar with progress and keep UI responsive
+            self._notice(f"Processing {i + 1} of {total} files...")
+            self.update_idletasks()
+
             original = os.path.basename(file_path)
             name, ext = os.path.splitext(original)
 
@@ -837,7 +868,12 @@ class MainWindow(TkinterDnD.Tk):
             List of dicts with keys: path, original, new, error
         """
         previews = []
-        for file_path in files:
+        total = len(files)
+        for i, file_path in enumerate(files):
+            # Update status bar with progress and keep UI responsive
+            self._notice(f"Processing {i + 1} of {total} files...")
+            self.update_idletasks()
+
             original = os.path.basename(file_path)
             name, ext = os.path.splitext(original)
 
@@ -936,6 +972,7 @@ class MainWindow(TkinterDnD.Tk):
         - Basic: Author_Site_Date_Time_Activity_Camera_Filename_G
 
         If _G already exists at end, this is idempotent (no change).
+        If _N exists at end, replace it with _G.
 
         Args:
             filename_without_ext: Filename without extension
@@ -947,16 +984,20 @@ class MainWindow(TkinterDnD.Tk):
         if filename_without_ext.endswith('_G'):
             return filename_without_ext  # Already has GPS marker
 
+        # Check if _N exists at the end - replace with _G
+        if filename_without_ext.endswith('_N'):
+            return filename_without_ext[:-2] + '_G'
+
         # Try Identity format first
         match = self.assembler.regex_match_identity(filename_without_ext)
         if match:
-            # Simply append _G to end
+            # Append _G to end (for legacy files without _N)
             return f"{filename_without_ext}_G"
 
         # Try Basic format
         match = self.assembler.regex_match_basic(filename_without_ext)
         if match:
-            # Simply append _G to end
+            # Append _G to end (for legacy files without _N)
             return f"{filename_without_ext}_G"
 
         # Invalid format
@@ -1647,8 +1688,10 @@ class MainWindow(TkinterDnD.Tk):
 
             elif self.editing_format == 'basic':
                 # Parse Basic format filename: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
-                # Remove _G suffix if present
-                clean_basename = basename[:-2] if basename.endswith('_G') else basename
+                # Remove _G or _N suffix if present
+                clean_basename = basename
+                if basename.endswith('_G') or basename.endswith('_N'):
+                    clean_basename = basename[:-2]
                 parts = clean_basename.split('_')
                 if len(parts) < 7:
                     preview['error'] = 'Invalid format'
@@ -1729,8 +1772,10 @@ class MainWindow(TkinterDnD.Tk):
 
             elif self.editing_format == 'basic':
                 # Parse Basic format filename: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
-                # Remove _G suffix if present
-                clean_basename = basename[:-2] if basename.endswith('_G') else basename
+                # Remove _G or _N suffix if present
+                clean_basename = basename
+                if basename.endswith('_G') or basename.endswith('_N'):
+                    clean_basename = basename[:-2]
                 parts = clean_basename.split('_')
                 if len(parts) < 7:
                     return False

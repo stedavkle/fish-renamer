@@ -53,6 +53,21 @@ class ExifToolHandler:
                 logger.info(f"Found local ExifTool: {self._exiftool_path}")
                 return
 
+        # Check common macOS installation paths (Homebrew, manual installs)
+        # These paths may not be in PATH when app is launched from Finder
+        if sys.platform == "darwin":
+            mac_paths = [
+                Path("/usr/local/bin/exiftool"),           # Intel Homebrew / manual install
+                Path("/opt/homebrew/bin/exiftool"),        # Apple Silicon Homebrew
+                Path("/usr/bin/exiftool"),                 # System install
+                Path.home() / "bin" / "exiftool",          # User bin
+            ]
+            for mac_path in mac_paths:
+                if mac_path.exists():
+                    self._exiftool_path = str(mac_path)
+                    logger.info(f"Found macOS ExifTool: {self._exiftool_path}")
+                    return
+
         logger.warning("ExifTool not found")
 
     def is_available(self) -> bool:

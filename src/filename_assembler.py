@@ -80,8 +80,8 @@ class FilenameAssembler:
         for filename in filenames:
             basename = os.path.basename(os.path.splitext(filename)[0])
 
-            # Remove _G suffix if present
-            if basename.endswith('_G'):
+            # Remove _G or _N suffix if present
+            if basename.endswith('_G') or basename.endswith('_N'):
                 basename = basename[:-2]
 
             # Parse Basic format: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
@@ -179,7 +179,8 @@ class FilenameAssembler:
         # Sanitize original name by removing underscores
         sanitized_original = original_filename.replace('_', '')
 
-        return f"{author_code}_{site_string}_{file_date}_{activity}_{camera}_{sanitized_original}"
+        # Append _N to indicate no GPS data (will be replaced with _G when GPS is added)
+        return f"{author_code}_{site_string}_{file_date}_{activity}_{camera}_{sanitized_original}_N"
 
     def assemble_identity_filename(self, existing_filename: str, family: str, genus: str,
                                    species: str, confidence: str, phase: str, colour: str,
@@ -232,7 +233,8 @@ class FilenameAssembler:
             logger.warning(f"Missing essential info for identity rename: {', '.join(missing)}")
             return None
 
-        return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour_code}_{behaviour_code}_{base_name}"
+        # Append _N to indicate no GPS data (will be replaced with _G when GPS is added)
+        return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour_code}_{behaviour_code}_{base_name}_N"
     
     def assemble_edited_filename(self, family: str, genus: str, species: str, confidence: str, phase: str, colour: str, behaviour: str, author_code: str, site_string: str, date: str, time: str, activity: str, camera: str, filename: str, extension: str) -> str:
         """
@@ -269,8 +271,10 @@ class FilenameAssembler:
         Returns:
             Site string (e.g., 'IDN-Bangka-BTI') or None if not found
         """
-        # Remove _G suffix if present
-        clean_filename = filename[:-2] if filename.endswith('_G') else filename
+        # Remove _G or _N suffix if present
+        clean_filename = filename
+        if filename.endswith('_G') or filename.endswith('_N'):
+            clean_filename = filename[:-2]
 
         # Try Identity format first (more specific)
         match = PATTERN_IDENTITY_FILENAME.match(clean_filename)
