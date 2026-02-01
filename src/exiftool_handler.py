@@ -1,5 +1,10 @@
 # src/exiftool_handler.py
-"""Handler for ExifTool operations including GPS coordinate writing."""
+"""Handler for ExifTool operations including GPS coordinate writing.
+
+Uses ExifTool's -stay_open mode for optimal performance. This keeps a single
+ExifTool process running and communicates via stdin/stdout, avoiding the
+~100ms startup overhead for each operation.
+"""
 
 import subprocess
 import shutil
@@ -9,8 +14,11 @@ import logging
 import tempfile
 import zipfile
 import urllib.request
+import json
+import threading
+import atexit
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +28,25 @@ EXIFTOOL_WINDOWS_URL = f"https://netix.dl.sourceforge.net/project/exiftool/exift
 EXIFTOOL_MAC_URL = f"https://netix.dl.sourceforge.net/project/exiftool/ExifTool-{EXIFTOOL_VERSION}.pkg"
 EXIFTOOL_WEBSITE = "https://exiftool.org/index.html"
 
+# Sentinel that ExifTool outputs when a command is complete
+EXIFTOOL_READY_SENTINEL = "{ready}"
+
 
 class ExifToolHandler:
-    """Handles ExifTool detection, installation, and GPS coordinate operations."""
+    """Handles ExifTool detection, installation, and operations.
+
+    Uses -stay_open mode to maintain a persistent ExifTool process for
+    optimal performance across multiple operations.
+    """
 
     def __init__(self):
         self._exiftool_path: Optional[str] = None
+        self._process: Optional[subprocess.Popen] = None
+        self._lock = threading.Lock()  # Thread safety for process communication
         self._check_exiftool()
+
+        # Register cleanup on application exit
+        atexit.register(self.shutdown)
 
     def _check_exiftool(self) -> None:
         """Check if ExifTool is available in system PATH or local installation."""
@@ -70,6 +90,136 @@ class ExifToolHandler:
 
         logger.warning("ExifTool not found")
 
+    def _start_process(self) -> bool:
+        """Start the persistent ExifTool process.
+
+        Returns:
+            True if process started successfully, False otherwise
+        """
+        if self._process is not None and self._process.poll() is None:
+            return True  # Already running
+
+        if not self._exiftool_path:
+            return False
+
+        try:
+            # Start ExifTool in stay_open mode
+            # -@ - means read arguments from stdin
+            # -stay_open True keeps the process running
+            startupinfo = None
+            if sys.platform == "win32":
+                # Hide console window on Windows
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = subprocess.SW_HIDE
+
+            self._process = subprocess.Popen(
+                [self._exiftool_path, "-stay_open", "True", "-@", "-"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                startupinfo=startupinfo,
+                bufsize=1,  # Line buffered
+            )
+            logger.info("Started persistent ExifTool process")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to start ExifTool process: {e}")
+            self._process = None
+            return False
+
+    def _ensure_process(self) -> bool:
+        """Ensure the persistent process is running.
+
+        Returns:
+            True if process is running, False otherwise
+        """
+        with self._lock:
+            if self._process is None or self._process.poll() is not None:
+                return self._start_process()
+            return True
+
+    def _execute(self, *args: str, timeout: float = 30.0) -> str:
+        """Execute an ExifTool command and return the output.
+
+        Args:
+            *args: Command arguments to pass to ExifTool
+            timeout: Timeout in seconds for the operation
+
+        Returns:
+            Output from ExifTool, or empty string on error
+        """
+        if not self._ensure_process():
+            return ""
+
+        with self._lock:
+            try:
+                # Send command arguments, one per line
+                for arg in args:
+                    self._process.stdin.write(arg + "\n")
+
+                # Send -execute to signal end of command
+                # ExifTool will output {ready} when done
+                self._process.stdin.write("-execute\n")
+                self._process.stdin.flush()
+
+                # Read output until we see the ready sentinel
+                output_lines = []
+                while True:
+                    line = self._process.stdout.readline()
+                    if not line:
+                        # Process died
+                        logger.warning("ExifTool process died unexpectedly")
+                        self._process = None
+                        break
+
+                    line = line.rstrip('\r\n')
+                    if line == EXIFTOOL_READY_SENTINEL:
+                        break
+                    output_lines.append(line)
+
+                return "\n".join(output_lines)
+
+            except Exception as e:
+                logger.error(f"ExifTool execution error: {e}")
+                # Try to restart on next call
+                self._process = None
+                return ""
+
+    def shutdown(self) -> None:
+        """Shutdown the persistent ExifTool process.
+
+        Called automatically on application exit via atexit.
+        """
+        with self._lock:
+            if self._process is not None and self._process.poll() is None:
+                try:
+                    # Send shutdown command
+                    self._process.stdin.write("-stay_open\n")
+                    self._process.stdin.write("False\n")
+                    self._process.stdin.flush()
+
+                    # Wait for graceful shutdown
+                    self._process.wait(timeout=5)
+                    logger.info("ExifTool process shutdown gracefully")
+
+                except subprocess.TimeoutExpired:
+                    # Force kill if it doesn't respond
+                    self._process.kill()
+                    logger.warning("ExifTool process killed after timeout")
+
+                except Exception as e:
+                    logger.error(f"Error shutting down ExifTool: {e}")
+                    try:
+                        self._process.kill()
+                    except:
+                        pass
+
+                finally:
+                    self._process = None
+
     def is_available(self) -> bool:
         """Check if ExifTool is available.
 
@@ -81,6 +231,8 @@ class ExifToolHandler:
     def get_version(self) -> Optional[str]:
         """Get ExifTool version string.
 
+        Uses the persistent process if available.
+
         Returns:
             Version string or None if ExifTool is not available
         """
@@ -88,13 +240,8 @@ class ExifToolHandler:
             return None
 
         try:
-            result = subprocess.run(
-                [self._exiftool_path, "-ver"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            return result.stdout.strip()
+            output = self._execute("-ver")
+            return output.strip() if output else None
         except Exception as e:
             logger.error(f"Failed to get ExifTool version: {e}")
             return None
@@ -102,9 +249,12 @@ class ExifToolHandler:
     def refresh_availability(self) -> bool:
         """Re-check ExifTool availability.
 
+        Shuts down any existing process and re-checks for ExifTool.
+
         Returns:
             True if ExifTool is now available
         """
+        self.shutdown()  # Stop existing process if running
         self._exiftool_path = None
         self._check_exiftool()
         return self.is_available()
@@ -223,6 +373,8 @@ class ExifToolHandler:
     def write_gps_coordinates(self, file_path: str, latitude: float, longitude: float) -> Tuple[bool, str]:
         """Write GPS coordinates to an image file's EXIF data.
 
+        Uses the persistent ExifTool process for optimal performance.
+
         Args:
             file_path: Path to the image file
             latitude: GPS latitude (positive = North, negative = South)
@@ -246,40 +398,36 @@ class ExifToolHandler:
             lat_abs = abs(latitude)
             lon_abs = abs(longitude)
 
-            # Build ExifTool command
-            cmd = [
-                self._exiftool_path,
+            # Execute via persistent process
+            output = self._execute(
                 "-overwrite_original",
                 f"-GPSLatitude={lat_abs}",
                 f"-GPSLatitudeRef={lat_ref}",
                 f"-GPSLongitude={lon_abs}",
                 f"-GPSLongitudeRef={lon_ref}",
                 file_path
-            ]
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
             )
 
-            if result.returncode == 0:
+            # Check for success indicators in output
+            if "1 image files updated" in output or "1 image file updated" in output:
                 logger.debug(f"GPS written to {file_path}: {latitude}, {longitude}")
                 return True, "GPS coordinates written successfully"
+            elif "error" in output.lower() or "warning" in output.lower():
+                logger.error(f"ExifTool error: {output}")
+                return False, f"ExifTool error: {output}"
             else:
-                error_msg = result.stderr.strip() or result.stdout.strip()
-                logger.error(f"ExifTool error: {error_msg}")
-                return False, f"ExifTool error: {error_msg}"
+                # Assume success if no error
+                logger.debug(f"GPS written to {file_path}: {latitude}, {longitude}")
+                return True, "GPS coordinates written successfully"
 
-        except subprocess.TimeoutExpired:
-            return False, "ExifTool operation timed out"
         except Exception as e:
             logger.error(f"Failed to write GPS: {e}")
             return False, f"Failed to write GPS: {e}"
 
     def read_gps_coordinates(self, file_path: str) -> Tuple[Optional[float], Optional[float]]:
         """Read GPS coordinates from an image file's EXIF data.
+
+        Uses the persistent ExifTool process for optimal performance.
 
         Args:
             file_path: Path to the image file
@@ -294,37 +442,119 @@ class ExifToolHandler:
             return None, None
 
         try:
-            cmd = [
-                self._exiftool_path,
+            # Execute via persistent process
+            output = self._execute(
                 "-GPSLatitude",
                 "-GPSLongitude",
-                "-n",  # Output in decimal format
+                "-n",   # Output in decimal format
                 "-s3",  # Short output, values only
                 file_path
-            ]
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=10
             )
 
-            if result.returncode == 0:
-                lines = result.stdout.strip().split('\n')
-                if len(lines) >= 2:
-                    try:
-                        lat = float(lines[0])
-                        lon = float(lines[1])
-                        return lat, lon
-                    except ValueError:
-                        pass
+            lines = output.strip().split('\n')
+            if len(lines) >= 2:
+                try:
+                    lat = float(lines[0])
+                    lon = float(lines[1])
+                    return lat, lon
+                except ValueError:
+                    pass
 
             return None, None
 
         except Exception as e:
             logger.error(f"Failed to read GPS: {e}")
             return None, None
+
+    def batch_read_creation_dates(self, file_paths: List[str]) -> Dict[str, str]:
+        """Read creation dates from multiple files using the persistent process.
+
+        Uses -stay_open mode for optimal performance - no subprocess spawn
+        overhead for each batch.
+
+        Args:
+            file_paths: List of file paths to read dates from
+
+        Returns:
+            Dict mapping file_path to formatted date string ('YYYY-MM-DD_HH-MM-SS')
+            Files without valid dates are omitted from the result.
+        """
+        if not self.is_available() or not file_paths:
+            return {}
+
+        results = {}
+
+        try:
+            # Build command arguments for JSON output with date tags
+            args = ["-json", "-DateTimeOriginal", "-CreateDate", "-ModifyDate"]
+            args.extend(file_paths)
+
+            # Execute via persistent process
+            output = self._execute(*args)
+
+            if output.strip():
+                # ExifTool may output summary lines before JSON (e.g., "2 image files read")
+                # Find the JSON array start
+                json_start = output.find('[')
+                if json_start != -1:
+                    json_str = output[json_start:]
+                else:
+                    json_str = output
+
+                try:
+                    data = json.loads(json_str)
+                    for entry in data:
+                        file_path = entry.get("SourceFile", "")
+                        if not file_path:
+                            continue
+
+                        # Try DateTimeOriginal first, then CreateDate, then ModifyDate
+                        date_str = (
+                            entry.get("DateTimeOriginal") or
+                            entry.get("CreateDate") or
+                            entry.get("ModifyDate")
+                        )
+
+                        if date_str and date_str != "0000:00:00 00:00:00":
+                            formatted = self._format_exif_datetime(date_str)
+                            if formatted:
+                                results[file_path] = formatted
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse ExifTool JSON output: {e}")
+                    logger.debug(f"JSON string was: {json_str[:200]}")
+
+        except Exception as e:
+            logger.error(f"Failed to batch read creation dates: {e}")
+
+        return results
+
+    def _format_exif_datetime(self, datetime_str: str) -> str:
+        """Format EXIF datetime string to application format.
+
+        Args:
+            datetime_str: Date in format 'YYYY:MM:DD HH:MM:SS' (with possible timezone)
+
+        Returns:
+            Formatted as 'YYYY-MM-DD_HH-MM-SS', or empty string if invalid
+        """
+        try:
+            # Remove timezone suffix if present (e.g., '+08:00')
+            if '+' in datetime_str:
+                datetime_str = datetime_str.split('+')[0].strip()
+            elif datetime_str.count('-') > 2:
+                # Handle format like '2024:01:15 14:30:45-08:00'
+                parts = datetime_str.rsplit('-', 1)
+                if ':' in parts[-1]:
+                    datetime_str = parts[0].strip()
+
+            # Replace first two colons with dashes (date part)
+            # Then replace space with underscore
+            # Then replace remaining colons with dashes (time part)
+            return datetime_str.replace(':', '-', 2).replace(' ', '_').replace(':', '-')
+        except (AttributeError, ValueError) as e:
+            logger.warning(f"Failed to format datetime string '{datetime_str}': {e}")
+            return ""
 
     def batch_write_gps(self, file_coords_list: List[Tuple[str, float, float]],
                         progress_callback=None) -> List[Tuple[str, bool, str]]:

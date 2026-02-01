@@ -756,6 +756,10 @@ class MainWindow(TkinterDnD.Tk):
     def _generate_previews_basic(self, files, author, site_tuple, activity, camera_abbrev):
         """Generate preview data for basic mode renames.
 
+        Uses ExifTool batch reading when available for faster processing of
+        multiple files. Falls back to PIL for single files or when ExifTool
+        is not available.
+
         Args:
             files: List of file paths
             author: Photographer name
@@ -766,8 +770,38 @@ class MainWindow(TkinterDnD.Tk):
         Returns:
             List of dicts with keys: path, original, new, error
         """
-        previews = []
         total = len(files)
+
+        # Use ExifTool batch reading for multiple files when available
+        if total > 1 and self.exiftool.is_available():
+            self._notice(f"Reading EXIF data from {total} files...")
+            self.update_idletasks()
+
+            # Batch read all dates at once
+            date_map = self.exiftool.batch_read_creation_dates(files)
+
+            previews = []
+            for file_path in files:
+                original = os.path.basename(file_path)
+                name, ext = os.path.splitext(original)
+
+                preview = {'path': file_path, 'original': original, 'new': None, 'error': None}
+
+                file_date = date_map.get(file_path, "")
+                if not file_date:
+                    preview['error'] = 'No EXIF date'
+                else:
+                    new_name = self.assembler.assemble_basic_filename(name, file_date, author, site_tuple, activity, camera_abbrev)
+                    if new_name:
+                        preview['new'] = new_name + ext
+                    else:
+                        preview['error'] = 'Already processed'
+
+                previews.append(preview)
+            return previews
+
+        # Fallback to PIL for single files or when ExifTool unavailable
+        previews = []
         for i, file_path in enumerate(files):
             # Update status bar with progress and keep UI responsive
             self._notice(f"Processing {i + 1} of {total} files...")
