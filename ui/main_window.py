@@ -167,6 +167,8 @@ class MainWindow(TkinterDnD.Tk):
         # Status bar below tabs
         self.status_frame = tk.Frame(self, bg='#f0f0f0', pady=5)
         self.status_frame.grid(row=1, column=0, sticky='ew')
+        self.status_frame.grid_columnconfigure(0, weight=1)
+
         self.status_label = tk.Label(
             self.status_frame,
             text="",
@@ -176,7 +178,26 @@ class MainWindow(TkinterDnD.Tk):
             anchor='w',
             padx=10
         )
-        self.status_label.pack(fill='x')
+        self.status_label.grid(row=0, column=0, sticky='ew')
+
+        # Progress bar (hidden by default)
+        self.progress_frame = tk.Frame(self.status_frame, bg='#f0f0f0')
+        self.progress_label = tk.Label(
+            self.progress_frame,
+            text="",
+            font=('Arial', 9),
+            bg='#f0f0f0',
+            fg='#666666',
+            anchor='w',
+            padx=10
+        )
+        self.progress_label.pack(side='left')
+        self.progress_bar = ttk.Progressbar(
+            self.progress_frame,
+            mode='determinate',
+            length=200
+        )
+        self.progress_bar.pack(side='left', padx=(0, 10), fill='x', expand=True)
 
     def _select_mode_tab(self, mode_name):
         """Handle tab selection and update mode."""
@@ -747,10 +768,15 @@ class MainWindow(TkinterDnD.Tk):
         self.rename_history.clear()
 
         renamed_count = 0
-        for mapping in to_rename:
+        total = len(to_rename)
+        self._show_progress(total, f"Renaming 0/{total}...")
+
+        for i, mapping in enumerate(to_rename):
             if self._rename_single_file_basic(mapping['path'], author, site_tuple, activity, camera_abbrev):
                 renamed_count += 1
+            self._update_progress(i + 1, f"Renaming {i + 1}/{total}...")
 
+        self._hide_progress()
         self._notice(f"{renamed_count}/{len(to_rename)} files renamed.")
 
     def _generate_previews_basic(self, files, author, site_tuple, activity, camera_abbrev):
@@ -774,11 +800,15 @@ class MainWindow(TkinterDnD.Tk):
 
         # Use ExifTool batch reading for multiple files when available
         if total > 1 and self.exiftool.is_available():
-            self._notice(f"Reading EXIF data from {total} files...")
-            self.update_idletasks()
+            self._show_progress(total, f"Reading EXIF 0/{total}...")
+
+            # Progress callback for batch reading
+            def on_exif_progress(current, total_files):
+                self._update_progress(current, f"Reading EXIF {current}/{total_files}...")
 
             # Batch read all dates at once
-            date_map = self.exiftool.batch_read_creation_dates(files)
+            date_map = self.exiftool.batch_read_creation_dates(files, progress_callback=on_exif_progress)
+            self._hide_progress()
 
             previews = []
             for file_path in files:
@@ -874,13 +904,17 @@ class MainWindow(TkinterDnD.Tk):
         self.rename_history.clear()
 
         renamed_count = 0
+        total = len(to_rename)
+        self._show_progress(total, f"Renaming 0/{total}...")
 
-        for mapping in to_rename:
+        for i, mapping in enumerate(to_rename):
             if self._rename_single_file_identity(
                 mapping['path'], family, genus, species, confidence, phase, colour, behaviour
             ):
                 renamed_count += 1
+            self._update_progress(i + 1, f"Renaming {i + 1}/{total}...")
 
+        self._hide_progress()
         self._notice(f"{renamed_count}/{len(to_rename)} files renamed.")
         self._reset_info()
 
@@ -961,8 +995,10 @@ class MainWindow(TkinterDnD.Tk):
         # Write GPS to files and rename them
         success_count = 0
         rename_count = 0
+        total = len(to_process)
+        self._show_progress(total, f"Writing GPS 0/{total}...")
 
-        for mapping in to_process:
+        for i, mapping in enumerate(to_process):
             # Write GPS coordinates
             success, _ = self.exiftool.write_gps_coordinates(
                 mapping['path'], mapping['lat'], mapping['lon']
@@ -993,6 +1029,9 @@ class MainWindow(TkinterDnD.Tk):
                     logger.debug(f"Skipped rename for {current_filename}: GPS marker already present")
                     rename_count += 1  # Count as successful since no rename needed
 
+            self._update_progress(i + 1, f"Writing GPS {i + 1}/{total}...")
+
+        self._hide_progress()
         if rename_count == success_count:
             self._notice(f"GPS written and {rename_count}/{len(to_process)} files renamed")
         else:
@@ -1258,6 +1297,38 @@ class MainWindow(TkinterDnD.Tk):
             text: The warning message to display (shown in red)
         """
         self.status_label.config(text=text, fg='#d32f2f')
+
+    def _show_progress(self, total, label="Processing..."):
+        """Show and initialize the progress bar.
+
+        Args:
+            total: Total number of items to process
+            label: Text to display next to the progress bar
+        """
+        self._progress_total = total
+        self.progress_bar['maximum'] = total
+        self.progress_bar['value'] = 0
+        self.progress_label.config(text=label)
+        self.progress_frame.grid(row=1, column=0, sticky='ew', padx=10, pady=(0, 5))
+        self.update_idletasks()
+
+    def _update_progress(self, current, label=None):
+        """Update the progress bar value.
+
+        Args:
+            current: Current progress value
+            label: Optional new label text
+        """
+        self.progress_bar['value'] = current
+        if label:
+            self.progress_label.config(text=label)
+        self.update_idletasks()
+
+    def _hide_progress(self):
+        """Hide the progress bar."""
+        self.progress_frame.grid_forget()
+        self.progress_bar['value'] = 0
+        self.update_idletasks()
 
     def _undo_last_rename(self):
         """Undo the last batch of rename operations.
@@ -1661,11 +1732,15 @@ class MainWindow(TkinterDnD.Tk):
         self.rename_history.clear()
 
         renamed_count = 0
+        total = len(to_rename)
+        self._show_progress(total, f"Renaming 0/{total}...")
 
-        for mapping in to_rename:
+        for i, mapping in enumerate(to_rename):
             if self._edit_single_file(mapping['path']):
                 renamed_count += 1
+            self._update_progress(i + 1, f"Renaming {i + 1}/{total}...")
 
+        self._hide_progress()
         # Update UI
         self._notice(f"{renamed_count}/{len(to_rename)} files were renamed successfully.")
         self._cleanup_after_edit()

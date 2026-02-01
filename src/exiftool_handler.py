@@ -468,14 +468,20 @@ class ExifToolHandler:
             logger.error(f"Failed to read GPS: {e}")
             return None, None
 
-    def batch_read_creation_dates(self, file_paths: List[str]) -> Dict[str, str]:
+    # Maximum files per ExifTool batch to avoid command line length issues
+    BATCH_SIZE = 40
+
+    def batch_read_creation_dates(self, file_paths: List[str],
+                                    progress_callback=None) -> Dict[str, str]:
         """Read creation dates from multiple files using the persistent process.
 
         Uses -stay_open mode for optimal performance - no subprocess spawn
-        overhead for each batch.
+        overhead for each batch. Files are processed in batches to avoid
+        command line length limits.
 
         Args:
             file_paths: List of file paths to read dates from
+            progress_callback: Optional callback function(current, total) for progress updates
 
         Returns:
             Dict mapping file_path to formatted date string ('YYYY-MM-DD_HH-MM-SS')
@@ -484,6 +490,31 @@ class ExifToolHandler:
         if not self.is_available() or not file_paths:
             return {}
 
+        results = {}
+        total = len(file_paths)
+
+        # Process files in batches to avoid command line length issues
+        for i in range(0, len(file_paths), self.BATCH_SIZE):
+            batch = file_paths[i:i + self.BATCH_SIZE]
+            batch_results = self._read_creation_dates_batch(batch)
+            results.update(batch_results)
+
+            # Report progress after each batch
+            if progress_callback:
+                processed = min(i + self.BATCH_SIZE, total)
+                progress_callback(processed, total)
+
+        return results
+
+    def _read_creation_dates_batch(self, file_paths: List[str]) -> Dict[str, str]:
+        """Read creation dates from a single batch of files.
+
+        Args:
+            file_paths: List of file paths (should be <= BATCH_SIZE)
+
+        Returns:
+            Dict mapping file_path to formatted date string
+        """
         results = {}
 
         try:
