@@ -23,7 +23,7 @@ from typing import Optional, Tuple, List, Dict
 logger = logging.getLogger(__name__)
 
 # ExifTool version and download URLs
-EXIFTOOL_VERSION = "13.45"
+EXIFTOOL_VERSION = "13.48"
 EXIFTOOL_WINDOWS_URL = f"https://netix.dl.sourceforge.net/project/exiftool/exiftool-{EXIFTOOL_VERSION}_64.zip?viasf=1"
 EXIFTOOL_MAC_URL = f"https://netix.dl.sourceforge.net/project/exiftool/ExifTool-{EXIFTOOL_VERSION}.pkg"
 EXIFTOOL_WEBSITE = "https://exiftool.org/index.html"
