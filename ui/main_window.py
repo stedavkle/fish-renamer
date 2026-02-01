@@ -52,6 +52,9 @@ class MainWindow(TkinterDnD.Tk):
         self.editing_format = None  # 'basic' or 'identity'
         self.fields_to_edit = None
 
+        # Processing state flag (prevents re-entrancy during batch operations)
+        self._processing = False
+
         # --- UI Setup ---
         self.tree_columns = TREE_COLUMNS
         self._setup_widgets()
@@ -623,6 +626,10 @@ class MainWindow(TkinterDnD.Tk):
         Args:
             event: Tkinter DND event containing dropped file paths
         """
+        # Ignore drops during processing
+        if getattr(self, '_processing', False):
+            return
+
         # Reset background color
         self.config(bg=self._default_bg)
 
@@ -1301,19 +1308,28 @@ class MainWindow(TkinterDnD.Tk):
     def _show_progress(self, total, label="Processing..."):
         """Show and initialize the progress bar.
 
+        Disables all user interaction during processing to prevent re-entrancy issues
+        while keeping the window responsive.
+
         Args:
             total: Total number of items to process
             label: Text to display next to the progress bar
         """
         self._progress_total = total
+        self._processing = True
         self.progress_bar['maximum'] = total
         self.progress_bar['value'] = 0
         self.progress_label.config(text=label)
         self.progress_frame.grid(row=1, column=0, sticky='ew', padx=10, pady=(0, 5))
-        self.update_idletasks()
+
+        # Disable all interactive elements
+        self._set_ui_enabled(False)
+        self.update()
 
     def _update_progress(self, current, label=None):
         """Update the progress bar value.
+
+        Processes all pending GUI events to keep the application responsive.
 
         Args:
             current: Current progress value
@@ -1322,13 +1338,73 @@ class MainWindow(TkinterDnD.Tk):
         self.progress_bar['value'] = current
         if label:
             self.progress_label.config(text=label)
-        self.update_idletasks()
+        # Use update() to process all events and prevent "not responding"
+        self.update()
 
     def _hide_progress(self):
-        """Hide the progress bar."""
+        """Hide the progress bar and re-enable user interaction."""
+        self._processing = False
         self.progress_frame.grid_forget()
         self.progress_bar['value'] = 0
-        self.update_idletasks()
+
+        # Re-enable all interactive elements
+        self._set_ui_enabled(True)
+        self.update()
+
+    def _set_ui_enabled(self, enabled):
+        """Enable or disable all interactive UI elements.
+
+        Args:
+            enabled: True to enable, False to disable
+        """
+        state = 'normal' if enabled else 'disabled'
+
+        # Disable/enable tab buttons
+        for btn in self.tab_buttons.values():
+            btn.config(state=state)
+
+        # Disable/enable all comboboxes
+        comboboxes = [
+            'cb_author', 'cb_site', 'cb_activity', 'cb_camera',
+            'cb_family', 'cb_genus', 'cb_species',
+            'cb_confidence', 'cb_phase', 'cb_colour', 'cb_behaviour'
+        ]
+        for cb_name in comboboxes:
+            cb = getattr(self, cb_name, None)
+            if cb:
+                cb.config(state=state if enabled else 'disabled')
+
+        # Disable/enable buttons
+        buttons = [
+            'bt_rename', 'btn_install_exiftool', 'btn_open_website', 'btn_refresh_status'
+        ]
+        for btn_name in buttons:
+            btn = getattr(self, btn_name, None)
+            if btn:
+                btn.config(state=state)
+
+        # Disable/enable search fields
+        for field_name in ['search_entry', 'search_field']:
+            field = getattr(self, field_name, None)
+            if field:
+                field.config(state=state)
+
+        # Disable/enable treeview selection
+        if hasattr(self, 'tree'):
+            # Prevent selection changes during processing
+            if enabled:
+                self.tree.config(selectmode='browse')
+            else:
+                self.tree.config(selectmode='none')
+
+        # Disable/enable drag-and-drop
+        if enabled:
+            self.drop_target_register(DND_FILES)
+        else:
+            try:
+                self.drop_target_unregister()
+            except Exception:
+                pass  # May already be unregistered
 
     def _undo_last_rename(self):
         """Undo the last batch of rename operations.
@@ -1336,6 +1412,10 @@ class MainWindow(TkinterDnD.Tk):
         Reverses all renames from the most recent rename operation by renaming
         files back to their original names.
         """
+        # Ignore during processing
+        if self._processing:
+            return
+
         if not self.rename_history:
             self._warn("Nothing to undo")
             return
@@ -1704,6 +1784,10 @@ class MainWindow(TkinterDnD.Tk):
 
     def _edit_info(self, event=None):
         """Performs batch editing of files based on user selections."""
+        # Ignore during processing
+        if self._processing:
+            return
+
         if not hasattr(self, 'editing_files') or len(self.editing_files) == 0:
             self._warn("No files selected for editing")
             return
