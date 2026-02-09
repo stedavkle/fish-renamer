@@ -47,6 +47,9 @@ class MainWindow(TkinterDnD.Tk):
         # Undo history for rename operations
         self.rename_history = []  # List of (old_path, new_path) tuples
 
+        # Tab enable/disable flag (used instead of widget state for tk.Label tabs)
+        self._tabs_enabled = True
+
         # Edit mode tracking
         self.editing_files = []
         self.editing_format = None  # 'basic' or 'identity'
@@ -151,7 +154,7 @@ class MainWindow(TkinterDnD.Tk):
         for col, mode_name in enumerate(['Basic', 'Identify', 'Edit', 'Meta']):
             # Add "(Beta)" suffix for EXIF tab display
             display_name = "Meta (Beta)" if mode_name == 'Meta' else mode_name
-            btn = tk.Button(
+            lbl = tk.Label(
                 self.tabs_frame,
                 text=display_name,
                 font=('Arial', 14, 'bold'),
@@ -159,10 +162,11 @@ class MainWindow(TkinterDnD.Tk):
                 fg='white',
                 relief='flat',
                 pady=12,
-                command=lambda m=mode_name: self._select_mode_tab(m)
+                cursor='hand2'
             )
-            btn.grid(row=0, column=col, sticky='ew')
-            self.tab_buttons[mode_name] = btn
+            lbl.bind('<Button-1>', lambda e, m=mode_name: self._on_tab_click(m))
+            lbl.grid(row=0, column=col, sticky='ew')
+            self.tab_buttons[mode_name] = lbl
 
         # Set initial active state
         self._update_tab_appearance()
@@ -201,6 +205,11 @@ class MainWindow(TkinterDnD.Tk):
             length=200
         )
         self.progress_bar.pack(side='left', padx=(0, 10), fill='x', expand=True)
+
+    def _on_tab_click(self, mode_name):
+        """Gate tab clicks through the enabled flag."""
+        if self._tabs_enabled:
+            self._select_mode_tab(mode_name)
 
     def _select_mode_tab(self, mode_name):
         """Handle tab selection and update mode."""
@@ -1359,9 +1368,15 @@ class MainWindow(TkinterDnD.Tk):
         """
         state = 'normal' if enabled else 'disabled'
 
-        # Disable/enable tab buttons
-        for btn in self.tab_buttons.values():
-            btn.config(state=state)
+        # Disable/enable tab labels
+        self._tabs_enabled = enabled
+        if enabled:
+            self._update_tab_appearance()
+            for lbl in self.tab_buttons.values():
+                lbl.config(cursor='hand2')
+        else:
+            for lbl in self.tab_buttons.values():
+                lbl.config(fg='#999999', cursor='')
 
         # Disable/enable all comboboxes
         comboboxes = [

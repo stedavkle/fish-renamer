@@ -20,7 +20,6 @@ class ExifPreviewDialog(tk.Toplevel):
         super().__init__(parent)
         self.title("GPS Coordinate Preview")
         self.transient(parent)
-        self.grab_set()
 
         self.file_mappings = file_mappings
         self.result = False
@@ -33,6 +32,10 @@ class ExifPreviewDialog(tk.Toplevel):
 
         # Handle window close
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+
+        # Grab input after window is fully mapped (prevents macOS freeze)
+        self.wait_visibility()
+        self.grab_set()
 
     def _build_ui(self):
         """Build the dialog UI."""

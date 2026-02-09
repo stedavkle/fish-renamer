@@ -19,10 +19,13 @@ class PreferencesWindow(tk.Toplevel):
         self.transient(parent)
         self.title("Preferences & Updates")
         self.geometry("520x400")
-        self.grab_set()
 
         self.remote_filelist = []
         self._build_ui()
+
+        # Grab input after window is fully mapped (prevents macOS freeze)
+        self.wait_visibility()
+        self.grab_set()
 
     def _build_ui(self):
         main_frame = ttk.Frame(self, padding="10")
