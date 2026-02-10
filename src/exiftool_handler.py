@@ -11,6 +11,7 @@ import shutil
 import os
 import sys
 import logging
+import re
 import tempfile
 import zipfile
 import urllib.request
@@ -23,10 +24,6 @@ from src import app_utils
 
 logger = logging.getLogger(__name__)
 
-# ExifTool version and download URLs
-EXIFTOOL_VERSION = "13.48"
-EXIFTOOL_WINDOWS_URL = f"https://netix.dl.sourceforge.net/project/exiftool/exiftool-{EXIFTOOL_VERSION}_64.zip?viasf=1"
-EXIFTOOL_MAC_URL = f"https://netix.dl.sourceforge.net/project/exiftool/ExifTool-{EXIFTOOL_VERSION}.pkg"
 EXIFTOOL_WEBSITE = "https://exiftool.org/index.html"
 
 # Sentinel that ExifTool outputs when a command is complete
@@ -262,20 +259,6 @@ class ExifToolHandler:
         return self.is_available()
 
     @staticmethod
-    def get_download_url() -> str:
-        """Get the appropriate download URL for the current platform.
-
-        Returns:
-            Download URL string
-        """
-        if sys.platform == "win32":
-            return EXIFTOOL_WINDOWS_URL
-        elif sys.platform == "darwin":
-            return EXIFTOOL_MAC_URL
-        else:
-            return EXIFTOOL_WEBSITE
-
-    @staticmethod
     def get_website_url() -> str:
         """Get the ExifTool website URL.
 
@@ -283,6 +266,51 @@ class ExifToolHandler:
             Website URL string
         """
         return EXIFTOOL_WEBSITE
+
+    @staticmethod
+    def _fetch_exiftool_page() -> str:
+        """Fetch the exiftool.org HTML page (cached across calls in one session)."""
+        req = urllib.request.Request(EXIFTOOL_WEBSITE, headers={"User-Agent": "FishRenamer"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+
+    @staticmethod
+    def _fetch_windows_download_url() -> str:
+        """Scrape the current 64-bit Windows download URL from exiftool.org.
+
+        Returns:
+            SourceForge download URL for the 64-bit Windows zip
+
+        Raises:
+            RuntimeError: If the download link cannot be found on the page
+        """
+        html = ExifToolHandler._fetch_exiftool_page()
+        match = re.search(
+            r'href="(https://sourceforge\.net/projects/exiftool/files/exiftool-[\d.]+_64\.zip/download)"',
+            html,
+        )
+        if not match:
+            raise RuntimeError("Could not find 64-bit Windows download link on exiftool.org")
+        return match.group(1)
+
+    @staticmethod
+    def _fetch_macos_download_url() -> str:
+        """Scrape the current macOS .pkg download URL from exiftool.org.
+
+        Returns:
+            SourceForge download URL for the macOS pkg
+
+        Raises:
+            RuntimeError: If the download link cannot be found on the page
+        """
+        html = ExifToolHandler._fetch_exiftool_page()
+        match = re.search(
+            r'href="(https://sourceforge\.net/projects/exiftool/files/ExifTool-[\d.]+\.pkg/download)"',
+            html,
+        )
+        if not match:
+            raise RuntimeError("Could not find macOS download link on exiftool.org")
+        return match.group(1)
 
     def download_and_install(self, progress_callback=None) -> Tuple[bool, str]:
         """Download and install ExifTool for Windows.
@@ -297,6 +325,15 @@ class ExifToolHandler:
             return False, "Automatic installation is only supported on Windows. Please install manually."
 
         try:
+            # Fetch current download URL from exiftool.org
+            if progress_callback:
+                progress_callback(5, "Fetching latest version info...")
+
+            try:
+                download_url = self._fetch_windows_download_url()
+            except Exception as e:
+                return False, f"Failed to get download URL: {e}"
+
             app_dir = app_utils.get_data_path()
             install_dir = app_dir / "exiftool"
             install_dir.mkdir(exist_ok=True)
@@ -308,7 +345,10 @@ class ExifToolHandler:
             zip_path = install_dir / "exiftool.zip"
 
             try:
-                urllib.request.urlretrieve(EXIFTOOL_WINDOWS_URL, zip_path)
+                req = urllib.request.Request(download_url, headers={"User-Agent": "FishRenamer"})
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    with open(zip_path, 'wb') as f:
+                        f.write(resp.read())
             except Exception as e:
                 return False, f"Download failed: {e}"
 
@@ -323,13 +363,17 @@ class ExifToolHandler:
                 return False, f"Extraction failed: {e}"
 
             # Move all contents from extracted subfolder to install_dir
-            # The zip extracts to a subfolder like "exiftool-13.45_64"
+            # The zip extracts to a subfolder like "exiftool-13.50_64"
             if progress_callback:
                 progress_callback(80, "Configuring...")
 
-            extracted_folder = install_dir / f"exiftool-{EXIFTOOL_VERSION}_64"
+            # Find the extracted subfolder dynamically
+            extracted_folder = next(
+                (d for d in install_dir.iterdir() if d.is_dir() and d.name.startswith("exiftool-")),
+                None,
+            )
 
-            if extracted_folder.exists() and extracted_folder.is_dir():
+            if extracted_folder is not None:
                 # Move all contents from extracted folder to install_dir
                 for item in extracted_folder.iterdir():
                     target_path = install_dir / item.name

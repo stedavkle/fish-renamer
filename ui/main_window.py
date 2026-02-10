@@ -466,7 +466,7 @@ class MainWindow(TkinterDnD.Tk):
 
         self.btn_install_exiftool = ttk.Button(
             self.exiftool_buttons_frame,
-            text="Install ExifTool (Windows)",
+            text="Install ExifTool",
             command=self._install_exiftool
         )
 
@@ -515,13 +515,30 @@ class MainWindow(TkinterDnD.Tk):
             )
             self.exiftool_version_label.config(text="ExifTool is required to write GPS coordinates")
 
-            # Show install button on Windows, website button on other platforms
-            if sys.platform == "win32":
+            # Show install button on Windows and macOS, website button on other platforms
+            if sys.platform in ("win32", "darwin"):
                 self.btn_install_exiftool.pack(side='left', padx=(0, 5))
             self.btn_open_website.pack(side='left', padx=(0, 5))
 
     def _install_exiftool(self):
         """Attempt to download and install ExifTool."""
+        import sys
+        import webbrowser
+        from src.exiftool_handler import ExifToolHandler
+
+        if sys.platform == "darwin":
+            # On macOS, open the browser to download the .pkg installer
+            self.exiftool_status_label.config(text="Fetching download link...", foreground='orange')
+            self.update_idletasks()
+            try:
+                url = ExifToolHandler._fetch_macos_download_url()
+                webbrowser.open(url)
+                self._notice("Opened macOS installer download in browser. Install the .pkg, then press Refresh.")
+            except Exception as e:
+                self._warn(f"Failed to get download link: {e}")
+            self._update_exiftool_status()
+            return
+
         self.exiftool_status_label.config(text="Installing...", foreground='orange')
         self.update_idletasks()
 
@@ -606,7 +623,7 @@ class MainWindow(TkinterDnD.Tk):
         self.cb_camera.set(self.config_manager.get_user_pref('camera', default_camera))
 
         # Fill tree with all fish initially
-        self.fill_tree(self.data.get_all_fish().values.tolist())
+        self.fill_tree(self.data.get_all_fish())
 
     def _show_preferences(self):
         """Open the preferences and updates dialog window.
@@ -1644,8 +1661,8 @@ class MainWindow(TkinterDnD.Tk):
 
         fam_df = self.data.filter_fish({'Family': fam})
         fam_gen_df = self.data.filter_fish({'Family': fam, 'Genus': gen})
-        self.cb_genus['values'] = [self.data.genus_default] + sorted(fam_df['Genus'].unique())
-        self.cb_species['values'] = [self.data.species_default] + sorted(fam_gen_df['Species'].unique())
+        self.cb_genus['values'] = [self.data.genus_default] + self.data.unique_column(fam_df, 'Genus')
+        self.cb_species['values'] = [self.data.species_default] + self.data.unique_column(fam_gen_df, 'Species')
 
         # Enable species dropdown when row selected
         self.cb_species.config(state='readonly')
@@ -1682,7 +1699,7 @@ class MainWindow(TkinterDnD.Tk):
         if search_string == SEARCH_PLACEHOLDER:
             search_string = ""
         results = self.data.search_fish(search_string)
-        self.fill_tree(results.values.tolist())
+        self.fill_tree(results)
 
         # Show search results count
         count = len(results)
@@ -1706,12 +1723,12 @@ class MainWindow(TkinterDnD.Tk):
             self.cb_species.config(state='disabled')
         else:
             filtered_df = self.data.filter_fish({'Family': family})
-        self.cb_genus['values'] = [self.data.genus_default] + sorted(filtered_df['Genus'].unique())
+        self.cb_genus['values'] = [self.data.genus_default] + self.data.unique_column(filtered_df, 'Genus')
         self.cb_genus.set(self.data.genus_default)
-        self.cb_species['values'] = [self.data.species_default] + sorted(filtered_df['Species'].unique())
+        self.cb_species['values'] = [self.data.species_default] + self.data.unique_column(filtered_df, 'Species')
         if family != self.data.family_default:
             self.cb_species.set(self.data.species_default)
-        self.fill_tree(filtered_df.values.tolist())
+        self.fill_tree(self.data.to_values(filtered_df))
 
         if family == self.data.family_default: self.selection_confident(False)
 
@@ -1730,7 +1747,7 @@ class MainWindow(TkinterDnD.Tk):
         # Reset and disable species when genus is default
         if genus == self.data.genus_default:
             filtered_df = self.data.filter_fish({'Family': family})
-            self.cb_genus['values'] = [self.data.genus_default] + sorted(filtered_df['Genus'].unique())
+            self.cb_genus['values'] = [self.data.genus_default] + self.data.unique_column(filtered_df, 'Genus')
             self.cb_genus.set(self.data.genus_default)
             self.cb_species.set(self.data.species_default)
             self.cb_species.config(state='disabled')
@@ -1738,10 +1755,10 @@ class MainWindow(TkinterDnD.Tk):
             filtered_df = self.data.filter_fish({'Family': family, 'Genus': genus})
             self.cb_species.config(state='readonly')
 
-        self.cb_species['values'] = [self.data.species_default] + sorted(filtered_df['Species'].unique())
+        self.cb_species['values'] = [self.data.species_default] + self.data.unique_column(filtered_df, 'Species')
         if genus != self.data.genus_default:
             self.cb_species.set(self.data.species_default)
-        self.fill_tree(filtered_df.values.tolist())
+        self.fill_tree(self.data.to_values(filtered_df))
 
         if genus == self.data.genus_default: self.selection_confident(False)
 
@@ -1761,7 +1778,7 @@ class MainWindow(TkinterDnD.Tk):
             filtered_df = self.data.filter_fish({'Family': family, 'Genus': genus})
         else:
             filtered_df = self.data.filter_fish({'Family': family, 'Genus': genus, 'Species': species})
-        self.fill_tree(filtered_df.values.tolist())
+        self.fill_tree(self.data.to_values(filtered_df))
         self.selection_confident(species != self.data.species_default)
     
     def selection_confident(self, is_confident: bool):
