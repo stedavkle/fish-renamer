@@ -453,16 +453,26 @@ class MainWindow(TkinterDnD.Tk):
         # ExifTool status section
         status_frame = ttk.LabelFrame(self.exif_frame, text="ExifTool Status", padding=10)
         status_frame.pack(fill='x', padx=5, pady=5)
+        status_frame.grid_columnconfigure(1, weight=1)
 
+        # Row 0: status
+        ttk.Label(status_frame, text="Status:").grid(row=0, column=0, sticky='w', padx=(0, 5))
         self.exiftool_status_label = ttk.Label(status_frame, text="Checking...")
-        self.exiftool_status_label.pack(anchor='w')
+        self.exiftool_status_label.grid(row=0, column=1, sticky='w')
 
+        # Row 1: version / info
+        ttk.Label(status_frame, text="Version:").grid(row=1, column=0, sticky='w', padx=(0, 5))
         self.exiftool_version_label = ttk.Label(status_frame, text="")
-        self.exiftool_version_label.pack(anchor='w')
+        self.exiftool_version_label.grid(row=1, column=1, sticky='w')
 
-        # Install/download buttons frame
+        # Row 2: progress bar (hidden by default)
+        self.exiftool_progress = ttk.Progressbar(status_frame, mode='determinate', length=200)
+        self.exiftool_progress.grid(row=2, column=0, columnspan=2, sticky='ew', pady=(5, 0))
+        self.exiftool_progress.grid_remove()
+
+        # Row 3: buttons
         self.exiftool_buttons_frame = ttk.Frame(status_frame)
-        self.exiftool_buttons_frame.pack(fill='x', pady=(10, 0))
+        self.exiftool_buttons_frame.grid(row=3, column=0, columnspan=2, sticky='w', pady=(10, 0))
 
         self.btn_install_exiftool = ttk.Button(
             self.exiftool_buttons_frame,
@@ -499,23 +509,22 @@ class MainWindow(TkinterDnD.Tk):
         """Update the ExifTool status display."""
         import sys
 
+        # Hide progress bar
+        self.exiftool_progress.grid_remove()
+        self.exiftool_progress['value'] = 0
+
+        # Reset buttons — clear then re-add as needed
+        self.btn_install_exiftool.pack_forget()
+        self.btn_open_website.pack_forget()
+
         if self.exiftool.is_available():
             version = self.exiftool.get_version()
-            self.exiftool_status_label.config(
-                text="Status: Installed",
-                foreground='green'
-            )
-            self.exiftool_version_label.config(text=f"Version: {version}")
-            self.btn_install_exiftool.pack_forget()
-            self.btn_open_website.pack_forget()
+            self.exiftool_status_label.config(text="Installed", foreground='green')
+            self.exiftool_version_label.config(text=version or "unknown")
         else:
-            self.exiftool_status_label.config(
-                text="Status: Not installed",
-                foreground='red'
-            )
-            self.exiftool_version_label.config(text="ExifTool is required to write GPS coordinates")
+            self.exiftool_status_label.config(text="Not installed", foreground='red')
+            self.exiftool_version_label.config(text="Required to write GPS coordinates")
 
-            # Show install button on Windows and macOS, website button on other platforms
             if sys.platform in ("win32", "darwin"):
                 self.btn_install_exiftool.pack(side='left', padx=(0, 5))
             self.btn_open_website.pack(side='left', padx=(0, 5))
@@ -539,11 +548,18 @@ class MainWindow(TkinterDnD.Tk):
             self._update_exiftool_status()
             return
 
+        # Windows: download and install with progress bar
         self.exiftool_status_label.config(text="Installing...", foreground='orange')
+        self.exiftool_version_label.config(text="")
+        self.exiftool_progress['value'] = 0
+        self.exiftool_progress.grid()
+        self.btn_install_exiftool.pack_forget()
+        self.btn_open_website.pack_forget()
         self.update_idletasks()
 
         def progress_callback(percent, message):
-            self.exiftool_version_label.config(text=f"{message} ({percent}%)")
+            self.exiftool_progress['value'] = percent
+            self.exiftool_version_label.config(text=message)
             self.update_idletasks()
 
         success, message = self.exiftool.download_and_install(progress_callback)
