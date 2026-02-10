@@ -699,10 +699,11 @@ class MainWindow(TkinterDnD.Tk):
             self._warn("Files have no common editable information.")
             return
 
-        # Map the 14-element array to the 11 UI controls
+        # Map the 14-element list to the 11 UI controls
         # [0-6: taxonomy, 7: author, 8: site, 9-10: date/time (not editable), 11: activity, 12: camera, 13: original (not editable)]
-        ui_flags = is_same[[0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12]]
-        ui_values = values[[0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12]]
+        ui_indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12]
+        ui_flags = [is_same[i] for i in ui_indices]
+        ui_values = [values[i] for i in ui_indices]
 
         # Convert attribute abbreviations to labels (only for Identity format)
         if self.editing_format == 'identity':

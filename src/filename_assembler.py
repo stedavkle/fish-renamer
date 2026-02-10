@@ -1,7 +1,6 @@
 # filename_assembler.py
 import re
 import os
-import numpy as np
 import logging
 from typing import Optional, List, Tuple
 from .constants import (
@@ -23,7 +22,7 @@ class FilenameAssembler:
         """Checks if a filename matches the basic or full processed format."""
         return PATTERN_BASIC_FILENAME.match(filename) is not None
 
-    def analyze_files_for_editing(self, filenames: List[str]) -> Tuple[np.ndarray, np.ndarray]:
+    def analyze_files_for_editing(self, filenames: List[str]) -> Tuple[list, list]:
         """
         Parses a list of filenames to find which metadata fields are identical across all files.
 
@@ -31,7 +30,7 @@ class FilenameAssembler:
             filenames: List of filenames to analyze
 
         Returns:
-            Tuple of (is_same_flags, common_values) as numpy arrays
+            Tuple of (is_same_flags, common_values) as lists
 
         Raises:
             ValueError: If filenames don't match identity pattern
@@ -51,15 +50,16 @@ class FilenameAssembler:
             parsed_info.append(match.groups())
 
         try:
-            info = np.array(parsed_info)
-            is_same = (info[:, :] == info[0, :]).all(axis=0)
-            values = np.array([info[0][i] if is_same[i] else None for i in range(info.shape[1])])
+            first = parsed_info[0]
+            num_fields = len(first)
+            is_same = [all(row[i] == first[i] for row in parsed_info) for i in range(num_fields)]
+            values = [first[i] if is_same[i] else None for i in range(num_fields)]
             return is_same, values
         except (IndexError, ValueError) as e:
             logger.error(f"Error analyzing files for editing: {e}")
             raise ValueError(f"Failed to analyze filenames: {e}")
 
-    def analyze_basic_files_for_editing(self, filenames: List[str]) -> Tuple[np.ndarray, np.ndarray]:
+    def analyze_basic_files_for_editing(self, filenames: List[str]) -> Tuple[list, list]:
         """
         Parses a list of Basic format filenames to find which metadata fields are identical.
 
@@ -67,7 +67,7 @@ class FilenameAssembler:
             filenames: List of Basic format filenames to analyze
 
         Returns:
-            Tuple of (is_same_flags, common_values) as numpy arrays with 14 elements
+            Tuple of (is_same_flags, common_values) as lists with 14 elements
             to match the Identity format structure (first 7 are None/False for taxonomy)
 
         Raises:
@@ -104,15 +104,15 @@ class FilenameAssembler:
             parsed_info.append(parsed)
 
         try:
-            info = np.array(parsed_info, dtype=object)
-            is_same = np.array([False] * 14, dtype=bool)
+            first = parsed_info[0]
+            is_same = [False] * 14
 
             # Check which fields are the same across all files (skip taxonomy fields 0-6)
             for i in range(7, 14):
-                if all(info[j][i] == info[0][i] for j in range(len(info))):
+                if all(row[i] == first[i] for row in parsed_info):
                     is_same[i] = True
 
-            values = np.array([info[0][i] if is_same[i] else None for i in range(14)], dtype=object)
+            values = [first[i] if is_same[i] else None for i in range(14)]
             return is_same, values
         except (IndexError, ValueError) as e:
             logger.error(f"Error analyzing basic files for editing: {e}")
