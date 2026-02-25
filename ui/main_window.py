@@ -687,7 +687,7 @@ class MainWindow(TkinterDnD.Tk):
 
         handler = mode_handlers.get(mode)
         if handler:
-            handler(files)
+            self.after(0, lambda h=handler, f=files: h(f))
         else:
             self._warn(f"Unknown mode: {mode}")
 
