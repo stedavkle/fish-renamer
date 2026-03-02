@@ -236,7 +236,7 @@ class DataManager:
     @staticmethod
     def unique_column(rows, column):
         """Get sorted unique values from a column in list-of-dicts."""
-        return sorted(set(row[column] for row in rows))
+        return sorted(v for v in set(row[column] for row in rows) if v)
 
     def get_divesite_area_site(self, site_string: str) -> Optional[str]:
         """Get formatted 'Area, Site' from site string.
