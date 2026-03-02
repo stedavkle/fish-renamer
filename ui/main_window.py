@@ -1898,6 +1898,11 @@ class MainWindow(TkinterDnD.Tk):
 
             preview = {'path': file_path, 'original': original, 'new': None, 'error': None}
 
+            # Capture GPS suffix before parsing strips it
+            gps_suffix = ''
+            if basename.endswith('_G') or basename.endswith('_N'):
+                gps_suffix = basename[-2:]
+
             if self.editing_format == 'identity':
                 # Parse Identity format filename
                 match = self.assembler.regex_match_identity(basename)
@@ -1910,6 +1915,7 @@ class MainWindow(TkinterDnD.Tk):
 
                 # Build new filename from edited/original fields
                 edited_fields = self._collect_edited_fields(info)
+                edited_fields['filename'] += gps_suffix
 
                 new_filename = self.assembler.assemble_edited_filename(
                     edited_fields['family'],
@@ -1931,10 +1937,8 @@ class MainWindow(TkinterDnD.Tk):
 
             elif self.editing_format == 'basic':
                 # Parse Basic format filename: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
-                # Remove _G or _N suffix if present
-                clean_basename = basename
-                if basename.endswith('_G') or basename.endswith('_N'):
-                    clean_basename = basename[:-2]
+                # Remove _G or _N suffix if present (already captured in gps_suffix above)
+                clean_basename = basename[:-2] if gps_suffix else basename
                 parts = clean_basename.split('_')
                 if len(parts) < 7:
                     preview['error'] = 'Invalid format'
@@ -1948,6 +1952,7 @@ class MainWindow(TkinterDnD.Tk):
 
                 # Build new filename from edited/original fields
                 edited_fields = self._collect_edited_fields(info)
+                edited_fields['filename'] += gps_suffix
 
                 new_filename = self.assembler.assemble_edited_basic_filename(
                     edited_fields['author_code'],
@@ -1984,6 +1989,11 @@ class MainWindow(TkinterDnD.Tk):
             filepath, extension = os.path.splitext(file_path)
             basename = os.path.basename(filepath)
 
+            # Capture GPS suffix before parsing strips it
+            gps_suffix = ''
+            if basename.endswith('_G') or basename.endswith('_N'):
+                gps_suffix = basename[-2:]
+
             if self.editing_format == 'identity':
                 # Parse Identity format filename
                 match = self.assembler.regex_match_identity(basename)
@@ -1994,6 +2004,7 @@ class MainWindow(TkinterDnD.Tk):
 
                 # Build new filename from edited/original fields
                 edited_fields = self._collect_edited_fields(info)
+                edited_fields['filename'] += gps_suffix
 
                 new_filename = self.assembler.assemble_edited_filename(
                     edited_fields['family'],
@@ -2015,10 +2026,8 @@ class MainWindow(TkinterDnD.Tk):
 
             elif self.editing_format == 'basic':
                 # Parse Basic format filename: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
-                # Remove _G or _N suffix if present
-                clean_basename = basename
-                if basename.endswith('_G') or basename.endswith('_N'):
-                    clean_basename = basename[:-2]
+                # Remove _G or _N suffix if present (already captured in gps_suffix above)
+                clean_basename = basename[:-2] if gps_suffix else basename
                 parts = clean_basename.split('_')
                 if len(parts) < 7:
                     return False
@@ -2030,6 +2039,7 @@ class MainWindow(TkinterDnD.Tk):
 
                 # Build new filename from edited/original fields
                 edited_fields = self._collect_edited_fields(info)
+                edited_fields['filename'] += gps_suffix
 
                 new_filename = self.assembler.assemble_edited_basic_filename(
                     edited_fields['author_code'],
