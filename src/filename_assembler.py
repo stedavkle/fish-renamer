@@ -216,6 +216,9 @@ class FilenameAssembler:
             return None
 
         base_name = base_name_match.group(1)
+        # Strip existing GPS suffix (_N or _G) — it will be re-appended
+        if base_name.endswith('_N') or base_name.endswith('_G'):
+            base_name = base_name[:-2]
         colour_code = colour
         behaviour_code = behaviour
 

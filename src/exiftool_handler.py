@@ -573,15 +573,16 @@ class ExifToolHandler:
                 # ExifTool may output summary lines before JSON (e.g., "2 image files read")
                 # Find the JSON array start
                 json_start = output.find('[')
-                if json_start != -1:
-                    json_str = output[json_start:]
+                json_end = output.rfind(']')
+                if json_start != -1 and json_end != -1:
+                    json_str = output[json_start:json_end + 1]
                 else:
                     json_str = output
 
                 try:
                     data = json.loads(json_str)
                     for entry in data:
-                        file_path = entry.get("SourceFile", "")
+                        file_path = os.path.normpath(entry.get("SourceFile", ""))
                         if not file_path:
                             continue
 

@@ -867,7 +867,7 @@ class MainWindow(TkinterDnD.Tk):
 
                 preview = {'path': file_path, 'original': original, 'new': None, 'error': None}
 
-                file_date = date_map.get(file_path, "")
+                file_date = date_map.get(os.path.normpath(file_path), "")
                 if not file_date:
                     preview['error'] = 'No EXIF date'
                 else:
@@ -1421,7 +1421,7 @@ class MainWindow(TkinterDnD.Tk):
         for cb_name in comboboxes:
             cb = getattr(self, cb_name, None)
             if cb:
-                cb.config(state=state if enabled else 'disabled')
+                cb.config(state='readonly' if enabled else 'disabled')
 
         # Disable/enable buttons
         buttons = [
@@ -1494,6 +1494,7 @@ class MainWindow(TkinterDnD.Tk):
         self.config_manager.set_user_pref('author', self.cb_author.get())
         self.config_manager.set_user_pref('site', self.cb_site.get())
         self.config_manager.set_user_pref('activity', self.cb_activity.get())
+        self.config_manager.set_user_pref('camera', self.cb_camera.get())
         self.config_manager.save()
 
     def _toggle_extended_info(self, event=None):

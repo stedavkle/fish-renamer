@@ -126,7 +126,7 @@ class ConfigManager:
 
     def _set_defaults(self) -> None:
         """Sets default values for a fresh configuration."""
-        self.user_prefs = {'author': '', 'site': '', 'activity': ''}
+        self.user_prefs = {'author': '', 'site': '', 'activity': '', 'camera': ''}
         self._set_default_paths()
         self.save()
 
