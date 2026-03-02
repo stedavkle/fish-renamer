@@ -69,8 +69,22 @@ class DataManager:
                     messages.append(f"Warning: {key} file not found at {path}")
             except Exception as e:
                 messages.append(f"Error loading {key} data: {e}")
+        self._set_defaults_from_labels()
         self.filter_by_location()
         return "\n".join(messages)
+
+    def _set_defaults_from_labels(self) -> None:
+        """Set attribute defaults from the first entry in each label category."""
+        label_defaults = {
+            'Confidence': 'confidence_default',
+            'Phase': 'phase_default',
+            'Colour': 'colour_default',
+            'Behaviour': 'behaviour_default',
+        }
+        for category, attr in label_defaults.items():
+            values = list(self.labels.get(category, {}).values())
+            if values:
+                setattr(self, attr, values[0])
 
     def get_available_locations(self) -> List[str]:
         """Get list of available location columns from species data.
