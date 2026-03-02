@@ -275,6 +275,22 @@ class ExifToolHandler:
             return resp.read().decode("utf-8", errors="replace")
 
     @staticmethod
+    def fetch_latest_version() -> Optional[str]:
+        """Fetch the latest ExifTool version number from exiftool.org.
+
+        Returns:
+            Version string (e.g., '13.25') or None if fetch fails
+        """
+        try:
+            html = ExifToolHandler._fetch_exiftool_page()
+            match = re.search(r'exiftool-([\d.]+)_64\.zip', html)
+            if match:
+                return match.group(1)
+        except Exception as e:
+            logger.warning(f"Failed to fetch latest ExifTool version: {e}")
+        return None
+
+    @staticmethod
     def _fetch_windows_download_url() -> str:
         """Scrape the current 64-bit Windows download URL from exiftool.org.
 

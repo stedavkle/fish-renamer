@@ -409,6 +409,9 @@ class MainWindow(TkinterDnD.Tk):
             {'label': 'Species', 'var': 'cb_species', 'values': [self.data.species_default],'row': 0, 'col': 2, 'cmd': self.set_species}
         ]
         self._setup_combobox_group(self.bottom_frame, configs)
+        # Genus and species start disabled (family defaults to 0-Fam)
+        self.cb_genus.config(state='disabled')
+        self.cb_species.config(state='disabled')
 
     def _setup_attribute_comboboxes(self):
         configs = [
@@ -453,6 +456,7 @@ class MainWindow(TkinterDnD.Tk):
         # ExifTool status section
         status_frame = ttk.LabelFrame(self.exif_frame, text="ExifTool Status", padding=10)
         status_frame.pack(fill='x', padx=5, pady=5)
+        status_frame.grid_columnconfigure(0, minsize=60)
         status_frame.grid_columnconfigure(1, weight=1)
 
         # Row 0: status
@@ -493,6 +497,12 @@ class MainWindow(TkinterDnD.Tk):
         )
         self.btn_refresh_status.pack(side='left', padx=(0, 5))
 
+        self.btn_update_exiftool = ttk.Button(
+            self.exiftool_buttons_frame,
+            text="Update ExifTool",
+            command=self._install_exiftool
+        )
+
         # Instructions
         instructions_frame = ttk.LabelFrame(self.exif_frame, text="Instructions", padding=10)
         instructions_frame.pack(fill='x', padx=5, pady=5)
@@ -506,7 +516,7 @@ class MainWindow(TkinterDnD.Tk):
         ttk.Label(instructions_frame, text=instructions_text, justify='left').pack(anchor='w')
 
     def _update_exiftool_status(self):
-        """Update the ExifTool status display."""
+        """Update the ExifTool status display and check for updates."""
         import sys
 
         # Hide progress bar
@@ -516,11 +526,27 @@ class MainWindow(TkinterDnD.Tk):
         # Reset buttons — clear then re-add as needed
         self.btn_install_exiftool.pack_forget()
         self.btn_open_website.pack_forget()
+        self.btn_update_exiftool.pack_forget()
 
         if self.exiftool.is_available():
             version = self.exiftool.get_version()
             self.exiftool_status_label.config(text="Installed", foreground='green')
             self.exiftool_version_label.config(text=version or "unknown")
+
+            # Check for updates
+            try:
+                latest = self.exiftool.fetch_latest_version()
+                if latest and version:
+                    installed = tuple(int(x) for x in version.split('.'))
+                    available = tuple(int(x) for x in latest.split('.'))
+                    if available > installed:
+                        self.exiftool_version_label.config(
+                            text=f"{version} (update available: {latest})"
+                        )
+                        if sys.platform in ("win32", "darwin"):
+                            self.btn_update_exiftool.pack(side='left', padx=(0, 5))
+            except Exception:
+                pass  # Version check is best-effort
         else:
             self.exiftool_status_label.config(text="Not installed", foreground='red')
             self.exiftool_version_label.config(text="Required to write GPS coordinates")
@@ -605,24 +631,22 @@ class MainWindow(TkinterDnD.Tk):
         self.cb_species['values'] = ['spec'] + self.data.get_unique_values('Species')
         self.cb_species.set(self.data.species_default)
 
-        # Filter out empty strings and prepend default text
+        # Populate combobox values (no placeholder text in dropdown)
         author_values = [v for v in self.data.get_unique_values('Full name', 'users_df') if v]
-        self.cb_author['values'] = [DEFAULT_PHOTOGRAPHER_TEXT] + author_values
-        self.cb_author.set(DEFAULT_PHOTOGRAPHER_TEXT)  # Default to placeholder text
+        self.cb_author['values'] = author_values
+        self.cb_author.set(DEFAULT_PHOTOGRAPHER_TEXT)
 
         self.cb_confidence['values'] = self.data.get_active_labels('Confidence')
         self.cb_phase['values'] = self.data.get_active_labels('Phase')
         self.cb_colour['values'] = self.data.get_active_labels('Colour')
         self.cb_behaviour['values'] = self.data.get_active_labels('Behaviour')
 
-        # Prepend default text to site list
         site_values = self.data.get_formatted_site_list()
-        self.cb_site['values'] = [DEFAULT_SITE_TEXT] + site_values
-        self.cb_site.set(DEFAULT_SITE_TEXT)  # Default to placeholder text
+        self.cb_site['values'] = site_values
+        self.cb_site.set(DEFAULT_SITE_TEXT)
 
-        # Filter out empty strings and prepend default text
         activity_values = [v for v in self.data.get_unique_values('activity', 'activities_df') if v]
-        self.cb_activity['values'] = [DEFAULT_ACTIVITY_TEXT] + activity_values
+        self.cb_activity['values'] = activity_values
 
         # Load camera values
         camera_values = self.data.get_camera_models()
@@ -632,9 +656,9 @@ class MainWindow(TkinterDnD.Tk):
         else:
             default_camera = ''
 
-        # Restore selections from config
+        # Restore selections from config (site always starts at default)
         self.cb_author.set(self.config_manager.get_user_pref('author', DEFAULT_PHOTOGRAPHER_TEXT))
-        self.cb_site.set(self.config_manager.get_user_pref('site', DEFAULT_SITE_TEXT))
+        self.cb_site.set(DEFAULT_SITE_TEXT)
         self.cb_activity.set(self.config_manager.get_user_pref('activity', DEFAULT_ACTIVITY_TEXT))
         self.cb_camera.set(self.config_manager.get_user_pref('camera', default_camera))
 
@@ -1485,14 +1509,16 @@ class MainWindow(TkinterDnD.Tk):
     def _save_user_prefs(self, event=None):
         """Save user preferences to config file.
 
-        Called when photographer, site, or activity selections change. Persists
-        the current selections so they can be restored on next application launch.
+        Only saves when in Basic mode so that Edit mode changes don't
+        overwrite the saved preferences. Site is never saved (always
+        starts at default on launch).
 
         Args:
             event: Tkinter event (can be None when called programmatically)
         """
+        if self.mode.get() != 'Basic':
+            return
         self.config_manager.set_user_pref('author', self.cb_author.get())
-        self.config_manager.set_user_pref('site', self.cb_site.get())
         self.config_manager.set_user_pref('activity', self.cb_activity.get())
         self.config_manager.set_user_pref('camera', self.cb_camera.get())
         self.config_manager.save()
@@ -1681,7 +1707,8 @@ class MainWindow(TkinterDnD.Tk):
         self.cb_genus['values'] = [self.data.genus_default] + self.data.unique_column(fam_df, 'Genus')
         self.cb_species['values'] = [self.data.species_default] + self.data.unique_column(fam_gen_df, 'Species')
 
-        # Enable species dropdown when row selected
+        # Enable genus and species dropdowns when row selected
+        self.cb_genus.config(state='readonly')
         self.cb_species.config(state='readonly')
 
         # Show selected species in status bar
@@ -1735,16 +1762,20 @@ class MainWindow(TkinterDnD.Tk):
         family = self.cb_family.get()
         if family == self.data.family_default:
             filtered_df = self.data.filter_fish()
-            # Disable species when family is default
+            # Disable genus and species when family is default
+            self.cb_genus.set(self.data.genus_default)
+            self.cb_genus.config(state='disabled')
             self.cb_species.set(self.data.species_default)
             self.cb_species.config(state='disabled')
         else:
             filtered_df = self.data.filter_fish({'Family': family})
+            self.cb_genus.config(state='readonly')
+            # Species stays disabled until genus is selected
+            self.cb_species.set(self.data.species_default)
+            self.cb_species.config(state='disabled')
         self.cb_genus['values'] = [self.data.genus_default] + self.data.unique_column(filtered_df, 'Genus')
         self.cb_genus.set(self.data.genus_default)
         self.cb_species['values'] = [self.data.species_default] + self.data.unique_column(filtered_df, 'Species')
-        if family != self.data.family_default:
-            self.cb_species.set(self.data.species_default)
         self.fill_tree(self.data.to_values(filtered_df))
 
         if family == self.data.family_default: self.selection_confident(False)
@@ -1799,10 +1830,12 @@ class MainWindow(TkinterDnD.Tk):
         self.selection_confident(species != self.data.species_default)
     
     def selection_confident(self, is_confident: bool):
-        if not is_confident:
-            self.cb_confidence.set(self.data.confidence_default)
+        confidence_labels = self.data.labels.get('Confidence', {})
+        if is_confident:
+            label = confidence_labels.get('ok', self.data.confidence_default)
         else:
-            self.cb_confidence.set(self.data.get_active_labels('Confidence')[0])
+            label = confidence_labels.get('cf', self.data.confidence_default)
+        self.cb_confidence.set(label)
         
     def sortby(self, tree, col, descending):
         """Sort treeview items by column.

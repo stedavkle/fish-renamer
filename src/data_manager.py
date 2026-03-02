@@ -74,14 +74,18 @@ class DataManager:
         return "\n".join(messages)
 
     def _set_defaults_from_labels(self) -> None:
-        """Set attribute defaults from the first entry in each label category."""
-        label_defaults = {
-            'Confidence': 'confidence_default',
-            'Phase': 'phase_default',
-            'Colour': 'colour_default',
-            'Behaviour': 'behaviour_default',
-        }
-        for category, attr in label_defaults.items():
+        """Set attribute defaults from the first entry in each label category.
+
+        Confidence defaults to 'cf' key specifically (best guess/uncertain),
+        since the default state is no confident species selection.
+        """
+        # Confidence uses 'cf' key as default
+        confidence_labels = self.labels.get('Confidence', {})
+        if 'cf' in confidence_labels:
+            self.confidence_default = confidence_labels['cf']
+
+        # Other categories default to their first entry
+        for category, attr in {'Phase': 'phase_default', 'Colour': 'colour_default', 'Behaviour': 'behaviour_default'}.items():
             values = list(self.labels.get(category, {}).values())
             if values:
                 setattr(self, attr, values[0])

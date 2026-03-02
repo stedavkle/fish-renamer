@@ -216,18 +216,15 @@ class PreferencesWindow(tk.Toplevel):
             subprocess.run(['xdg-open', data_path])
 
     def _reset_directory(self):
-        """Delete all files in the application data directory after confirmation."""
+        """Reset application data directory to defaults after confirmation."""
         if not messagebox.askyesno(
             "Confirm Reset",
-            "This will delete all data files in the application directory.\n\nAre you sure?"
+            "This will reset all data files to their defaults.\n\nAre you sure?"
         ):
             return
 
-        data_path = get_data_path()
         try:
-            for file in data_path.iterdir():
-                if file.is_file():
-                    file.unlink()
+            clear_data_files()
             self.update_status_label.config(text="Status: Directory reset.")
             self.master.on_data_updated()
         except Exception as e:

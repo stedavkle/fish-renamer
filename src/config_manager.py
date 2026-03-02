@@ -36,11 +36,16 @@ class ConfigManager:
             self._set_defaults()
             return
 
-        self.config.read(self.config_path)
-        self.user_prefs = dict(self.config.items(CONFIG_SECTION_USER_PREFS))
-        self.paths = dict(self.config.items(CONFIG_SECTION_PATHS))
-        self.misc = dict(self.config.items(CONFIG_SECTION_MISC))
-        
+        try:
+            self.config.read(self.config_path)
+            self.user_prefs = dict(self.config.items(CONFIG_SECTION_USER_PREFS))
+            self.paths = dict(self.config.items(CONFIG_SECTION_PATHS))
+            self.misc = dict(self.config.items(CONFIG_SECTION_MISC))
+        except (configparser.Error, KeyError, ValueError) as e:
+            logger.error(f"Failed to parse config file: {e}")
+            self._set_defaults()
+            return
+
         # Ensure essential paths have defaults if missing
         if not self.paths:
             self._set_default_paths()

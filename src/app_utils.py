@@ -103,14 +103,48 @@ def initialize_data_files():
             shutil.copy(source_path, dest_path)
 
 def clear_data_files():
-    """Deletes all files in the data directory (useful for testing)."""
+    """Deletes all data/config files in the data directory, skipping log files."""
     data_dir = get_data_path()
     if data_dir.exists() and data_dir.is_dir():
         for item in data_dir.iterdir():
-            os.remove(item)
-        logger.info(f"Cleared all data files in {data_dir}")
+            if item.suffix == '.log':
+                continue
+            try:
+                os.remove(item)
+            except PermissionError:
+                logger.warning(f"Could not remove {item} (file in use)")
+        logger.info(f"Cleared data files in {data_dir}")
     else:
         logger.warning(f"Data directory {data_dir} does not exist or is not a directory.")
+
+def restore_default_files():
+    """Force-copies all bundled default files to the data directory, overwriting existing ones.
+
+    Also deletes config.ini so it will be recreated with defaults on next load.
+    """
+    data_dir = get_data_path()
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    # Delete config.ini so ConfigManager recreates it with defaults
+    config_ini = data_dir / 'config.ini'
+    if config_ini.exists():
+        os.remove(config_ini)
+        logger.info("Removed config.ini for reset")
+
+    # Copy all bundled config files, overwriting any corrupted ones
+    config_source_dir = get_app_path().parent / 'config'
+    if not config_source_dir.exists():
+        logger.warning(f"Config source directory not found at {config_source_dir}")
+        return
+
+    for file_name in os.listdir(config_source_dir):
+        if not validate_safe_path(config_source_dir, Path(file_name)):
+            continue
+        source_path = config_source_dir / file_name
+        dest_path = data_dir / file_name
+        if source_path.is_file():
+            logger.info(f"Restoring default file: {file_name}")
+            shutil.copy(source_path, dest_path)
 
 def get_filename_diff(original: str, new: str) -> tuple[str, str, str]:
     """Calculate common prefix, changed part, and common suffix between two filenames.
