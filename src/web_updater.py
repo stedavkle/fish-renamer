@@ -2,177 +2,62 @@
 import requests
 import re
 import os
-import tempfile
-import shutil
 from pathlib import Path
-import time
-import json
 import logging
-from urllib.parse import urlparse, parse_qs
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
 
-class NetworkRequestWaiter:
-    """Custom WebDriverWait condition for detecting specific network requests.
-
-    This condition checks the browser's performance logs to see if a network
-    request containing a specific substring has been made.
-    """
-
-    def __init__(self, url_substring: str):
-        """Initialize the waiter.
-
-        Args:
-            url_substring: Substring to search for in request URLs
-        """
-        self.url_substring = url_substring
-        self.found_url = None
-
-    def __call__(self, driver) -> bool:
-        """Check if the network request has been made.
-
-        Args:
-            driver: Selenium WebDriver instance
-
-        Returns:
-            True if request was found, False otherwise
-        """
-        try:
-            logs = driver.get_log("performance")
-            for entry in logs:
-                log = json.loads(entry["message"])["message"]
-                if (
-                    "Network.requestWillBeSent" in log["method"]
-                    and "request" in log["params"]
-                    and self.url_substring in log["params"]["request"]["url"]
-                ):
-                    self.found_url = log["params"]["request"]["url"]
-                    return True
-        except (json.JSONDecodeError, KeyError):
-            pass
-        return False
-
 class WebUpdater:
     """Handles fetching file lists and downloading updates from a remote server."""
+
+    SHARE_ID = '5l-bcdzb6v'
+    PID = 'b1443699372.553636'
+    TOKEN_URL = 'https://api.hidrive.strato.com/2.1/share/token'
+
     def __init__(self, data_path: Path):
         self.data_path = data_path
-        self.ACCESS_TOKEN = ''
-        self.PID = 'b1443699372.553636'
-        self.HI_DRIVE_URL = "https://my.hidrive.com/share/5l-bcdzb6v"
-        self.list_dir_url = f'https://my.hidrive.com/api/dir?pid={self.PID}&access_token={self.ACCESS_TOKEN}'
-    
-    def get_hidrive_access_token(self, share_url, callback=None):
-        """
-        Navigates to a HiDrive share URL, clicks the 'Download all' button,
-        and captures the resulting network request to extract the access_token.
-        This version is hyper-optimized for speed and compatible with Selenium 4+.
+        self.access_token = ''
 
-        Args:
-            share_url (str): The public URL to the HiDrive shared folder.
-
-        Returns:
-            str: The extracted access token, or None if not found.
-        """
-        access_token = None
-
-        # Create a temp directory for any downloads (will be cleaned up)
-        temp_download_dir = tempfile.mkdtemp()
-
-        # --- HYPER-OPTIMIZATIONS ---
-        options = webdriver.ChromeOptions()
-        # Essential for speed
-        options.add_argument("--headless")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--disable-dev-shm-usage")
-        options.page_load_strategy = 'none'
-        options.add_argument("--disable-extensions")
-        options.add_argument("--disable-features=Translate")
-        options.add_argument("--disable-background-networking")
-        options.add_argument("--disable-sync")
-        options.add_argument("--disable-default-apps")
-        options.add_argument("--disable-dns-prefetch")
-        options.add_argument("--blink-settings=imagesEnabled=false")
-        options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
-
-        # Redirect downloads to temp directory to prevent .tmp files in app root
-        prefs = {
-            "download.default_directory": temp_download_dir,
-            "download.prompt_for_download": False,
-        }
-        options.add_experimental_option("prefs", prefs)
-
-        driver = None
-        try:
-            callback("Initializing...")
-            driver = webdriver.Chrome(options=options)
-            
-            callback(f"Navigating...")
-            driver.get(share_url)
-            wait = WebDriverWait(driver, 15)
-            
-            callback("Waiting...")
-            download_button_selector = "button[data-qa='menubar_download_all']"
-            download_button = wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, download_button_selector))
-            )
-            wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, download_button_selector))
-            )
-            callback("Clicking it...")
-            download_button.click()
-            callback("Waiting...")
-            target_substring = "api/file/archive/download"
-            request_wait = WebDriverWait(driver, 10, poll_frequency=0.05)
-            request_condition = NetworkRequestWaiter(target_substring)
-            request_wait.until(request_condition)
-            download_url = request_condition.found_url
-            callback(f"Found URL...")
-            parsed_url = urlparse(download_url)
-            query_params = parse_qs(parsed_url.query)
-            if 'access_token' in query_params:
-                callback("Access token extracted.")
-                access_token = query_params['access_token'][0]
-
-        except Exception as e:
-            callback(f"Error: {e}")
-            if driver:
-                driver.save_screenshot("hidrive_error.png")
-                logger.error("Saved a screenshot to 'hidrive_error.png' for debugging.")
-        finally:
-            if driver:
-                driver.quit()
-                logger.debug("Browser closed.")
-            # Clean up temp download directory
-            try:
-                shutil.rmtree(temp_download_dir)
-            except Exception as e:
-                logger.warning(f"Failed to clean up temp directory: {e}")
-        return access_token
-    
     def connect(self, callback=None):
         """Connects to the HiDrive service and retrieves the access token."""
-        self.access_token = self.get_hidrive_access_token(self.HI_DRIVE_URL, callback)
-        if not self.access_token:
-            raise ValueError("Failed to retrieve access token from HiDrive.")
-        self.list_dir_url = f'https://my.hidrive.com/api/dir?pid={self.PID}&access_token={self.access_token}'
+        if callback:
+            callback("Connecting...")
+        try:
+            resp = requests.post(
+                self.TOKEN_URL,
+                data={'id': self.SHARE_ID},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            token_data = resp.json()
+            self.access_token = token_data['access_token']
+        except Exception as e:
+            raise ValueError(f"Failed to retrieve access token from HiDrive: {e}")
+
+        self.list_dir_url = (
+            f'https://my.hidrive.com/api/dir?pid={self.PID}'
+            f'&access_token={self.access_token}'
+        )
         if callback:
             callback("Connected")
 
     def get_download_url(self, filename: str) -> str:
-        return f'https://my.hidrive.com/api/file?pid={self.PID}&path={filename}&access_token={self.access_token}'
+        return (
+            f'https://my.hidrive.com/api/file?pid={self.PID}'
+            f'&path={quote(filename)}&access_token={self.access_token}'
+        )
 
     def fetch_file_list(self):
         """Fetches the list of available files from the server."""
         try:
-            response = requests.get(self.list_dir_url)
+            response = requests.get(self.list_dir_url, timeout=15)
             response.raise_for_status()
-            return [member.get('name') for member in response.json().get('members', [])], "Files fetched successfully"
+            return [
+                member.get('name')
+                for member in response.json().get('members', [])
+            ], "Files fetched successfully"
         except requests.RequestException as e:
             return [], f"Error fetching file list: {e}"
 
@@ -212,13 +97,13 @@ class WebUpdater:
                     update_statuses[prefix] = reason
                 newest_files[prefix] = newest_file
         return update_statuses, newest_files
-    
+
     def _get_newest_file(self, files):
         """Returns the file with the most recent date in its name."""
         newest_file = None
         newest_date = None
         date_pattern = re.compile(r'(\d{4}-\d{2}-\d{2})')
-        
+
         for file in files:
             match = date_pattern.search(file)
             if match:
@@ -228,7 +113,7 @@ class WebUpdater:
                     newest_file = file
             else:
                 return file
-        
+
         return newest_file
 
     def _check_if_update_needed(self, config, cleaned_file_name, old_filepath):
@@ -265,11 +150,11 @@ class WebUpdater:
         new_filepath = self.data_path / cleaned_filename
         url = self.get_download_url(remote_file)
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=30)
             response.raise_for_status()
             with open(new_filepath, 'wb') as f:
                 f.write(response.content)
-            
+
             if old_filepath and old_filepath.exists() and old_filepath != new_filepath:
                 os.remove(old_filepath)
             return "updated"
