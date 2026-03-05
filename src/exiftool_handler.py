@@ -596,7 +596,7 @@ class ExifToolHandler:
                     json_str = output
 
                 try:
-                    data = json.loads(json_str)
+                    data = json.loads(json_str, strict=False)
                     for entry in data:
                         file_path = os.path.normpath(entry.get("SourceFile", ""))
                         if not file_path:

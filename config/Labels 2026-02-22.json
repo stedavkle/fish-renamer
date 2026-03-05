@@ -1,7 +1,9 @@
 {
     "Confidence": {
-      "ok": "confident",
-      "cf": "uncertain"
+      "ok": "confident (ok)",
+      "cf": "best guess (cf)",
+      "new": "new species (new)",
+      "tmp": "no clue (tmp)"
     },
     "Phase": {
       "ad": "adult",
@@ -10,7 +12,9 @@
       "M": "male",
       "TP": "terminal phase",
       "juv": "juvenile",
+      "larva": "larval stage",
       "pair": "pair",
+      "school": "group , school",
       "subad": "subadult",
       "trans": "transition phase"
     },
@@ -25,7 +29,7 @@
       "dead": "dead",
       "ill": "diseased, deformed",
       "diverg": "different colours",
-      "light": "white/plae/grey",
+      "light": "light/white/pale",
       "line": "lined",
       "mutant": "colour mutant",
       "no_spot": "typical spot absent",
@@ -34,13 +38,14 @@
       "nupt": "nuptial colour",
       "patter": "patterned",
       "red": "red",
-      "rela": "relaxed colour",
+      "relax": "relaxed colour",
       "scar": "scarred, deformed",
-      "spec": "speckled",
+      "speck": "speckled",
       "spot": "spotted",
       "strip": "striped",
       "tailspot": "tailspot",
       "two-tone": "bicolor",
+      "vari": "variation",
       "yell": "yellow"
     },
     "Behaviour": {
@@ -50,8 +55,7 @@
       "caught": "captured",
       "cleaned": "being cleaned",
       "cleans": "cleaning client",
-      "col": "colony",
-      "col-ch": "colour change (pic series)",
+      "col-ch": "colour change series",
       "comp": "competing",
       "court": "courting",
       "DAP": "DAP Act. Photoloc. suggestive",
@@ -62,14 +66,20 @@
       "mouth-b": "mouth brooding",
       "parent": "parenting, family",
       "rest": "resting",
-      "school": "schooling",
       "spawn": "spawning, oviposition",
       "team": "interspecific team",
       "warn": "warning",
       "yawn": "yawning"
     },
     "Camera": {
+      "O-tg6": "Olympus TG6",
+      "S-A6700": "Sony A6700",
       "S-A7IV": "Sony A7IV",
-      "O-tg6": "Olympus TG6"
+      "S-RX100V": "Sony RX100V",
+      "iPh-XR": "iPhone XR",
+      "iPh-16e": "iPhone 16e",
+      "N-AW130": "Nikon AW130",
+      "N-D4": "Nikon D4",
+      "N-D500": "Nikon D500"
     }
   }

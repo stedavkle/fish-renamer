@@ -469,14 +469,19 @@ class MainWindow(TkinterDnD.Tk):
         self.exiftool_version_label = ttk.Label(status_frame, text="")
         self.exiftool_version_label.grid(row=1, column=1, sticky='w')
 
-        # Row 2: progress bar (hidden by default)
+        # Row 2: download status (hidden by default)
+        ttk.Label(status_frame, text="Download:").grid(row=2, column=0, sticky='w', padx=(0, 5))
+        self.exiftool_download_label = ttk.Label(status_frame, text="", wraplength=350)
+        self.exiftool_download_label.grid(row=2, column=1, sticky='w')
+
+        # Row 3: progress bar (hidden by default)
         self.exiftool_progress = ttk.Progressbar(status_frame, mode='determinate', length=200)
-        self.exiftool_progress.grid(row=2, column=0, columnspan=2, sticky='ew', pady=(5, 0))
+        self.exiftool_progress.grid(row=3, column=0, columnspan=2, sticky='ew', pady=(5, 0))
         self.exiftool_progress.grid_remove()
 
-        # Row 3: buttons
+        # Row 4: buttons
         self.exiftool_buttons_frame = ttk.Frame(status_frame)
-        self.exiftool_buttons_frame.grid(row=3, column=0, columnspan=2, sticky='w', pady=(10, 0))
+        self.exiftool_buttons_frame.grid(row=4, column=0, columnspan=2, sticky='w', pady=(10, 0))
 
         self.btn_install_exiftool = ttk.Button(
             self.exiftool_buttons_frame,
@@ -519,9 +524,10 @@ class MainWindow(TkinterDnD.Tk):
         """Update the ExifTool status display and check for updates."""
         import sys
 
-        # Hide progress bar
+        # Hide progress bar and clear download status
         self.exiftool_progress.grid_remove()
         self.exiftool_progress['value'] = 0
+        self.exiftool_download_label.config(text="")
 
         # Reset buttons — clear then re-add as needed
         self.btn_install_exiftool.pack_forget()
@@ -563,7 +569,8 @@ class MainWindow(TkinterDnD.Tk):
 
         if sys.platform == "darwin":
             # On macOS, open the browser to download the .pkg installer
-            self.exiftool_status_label.config(text="Fetching download link...", foreground='orange')
+            self.exiftool_status_label.config(text="Installing...", foreground='orange')
+            self.exiftool_download_label.config(text="Fetching download link...")
             self.update_idletasks()
             try:
                 url = ExifToolHandler._fetch_macos_download_url()
@@ -576,7 +583,7 @@ class MainWindow(TkinterDnD.Tk):
 
         # Windows: download and install with progress bar
         self.exiftool_status_label.config(text="Installing...", foreground='orange')
-        self.exiftool_version_label.config(text="")
+        self.exiftool_download_label.config(text="Starting...")
         self.exiftool_progress['value'] = 0
         self.exiftool_progress.grid()
         self.btn_install_exiftool.pack_forget()
@@ -585,7 +592,7 @@ class MainWindow(TkinterDnD.Tk):
 
         def progress_callback(percent, message):
             self.exiftool_progress['value'] = percent
-            self.exiftool_version_label.config(text=message)
+            self.exiftool_download_label.config(text=message)
             self.update_idletasks()
 
         success, message = self.exiftool.download_and_install(progress_callback)
