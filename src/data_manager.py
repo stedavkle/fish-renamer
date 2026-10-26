@@ -70,7 +70,8 @@ class DataManager:
             except Exception as e:
                 messages.append(f"Error loading {key} data: {e}")
         self._set_defaults_from_labels()
-        self.filter_by_location()
+        # Re-apply the current (initially: saved) location; 'All' means no filter
+        self.filter_by_location('' if self.location == 'All' else self.location)
         return "\n".join(messages)
 
     def _set_defaults_from_labels(self) -> None:
@@ -251,11 +252,11 @@ class DataManager:
         Returns:
             Formatted 'Area, Site' string, or None if not found
         """
-        if not self.divesites_df or not site_string:
+        if not self.divesites_df_raw or not site_string:
             return None
 
         try:
-            result = next((row for row in self.divesites_df if row['Site string'] == site_string), None)
+            result = next((row for row in self.divesites_df_raw if row['Site string'] == site_string), None)
             if result:
                 return f"{result['Area']}, {result['Site']}"
         except (KeyError, IndexError) as e:
@@ -273,11 +274,11 @@ class DataManager:
         Returns:
             Site string identifier, or empty string if not found
         """
-        if not self.divesites_df or not area or not site:
+        if not self.divesites_df_raw or not area or not site:
             return ""
 
         try:
-            result = next((row for row in self.divesites_df if row['Area'] == area and row['Site'] == site), None)
+            result = next((row for row in self.divesites_df_raw if row['Area'] == area and row['Site'] == site), None)
             if result:
                 return str(result['Site string'])
         except (KeyError, IndexError) as e:
@@ -355,10 +356,10 @@ class DataManager:
         try:
             location, site = site_string.split(", ", 1)
 
-            if not self.divesites_df:
+            if not self.divesites_df_raw:
                 return (None, None)
 
-            result = next((row for row in self.divesites_df if row['Area'] == location and row['Site'] == site), None)
+            result = next((row for row in self.divesites_df_raw if row['Area'] == location and row['Site'] == site), None)
 
             if not result:
                 logger.warning(f"No coordinates found for site: '{site_string}'")
