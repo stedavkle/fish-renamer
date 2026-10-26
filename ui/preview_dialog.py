@@ -6,7 +6,7 @@ from tkinter import ttk, font as tkFont
 
 
 class BatchPreviewDialog(tk.Toplevel):
-    """Dialog showing a preview of files to be renamed with options to skip errors."""
+    """Dialog showing a preview of files to be renamed; files with errors are skipped."""
 
     def __init__(self, parent, file_mappings):
         """Initialize the batch preview dialog.
@@ -21,7 +21,6 @@ class BatchPreviewDialog(tk.Toplevel):
 
         self.file_mappings = file_mappings
         self.result = False
-        self.skip_errors = tk.BooleanVar(value=True)
         self.parent = parent
 
         self._build_ui()
@@ -71,14 +70,6 @@ class BatchPreviewDialog(tk.Toplevel):
         # Options frame
         options_frame = ttk.Frame(main_frame)
         options_frame.grid(row=2, column=0, columnspan=2, sticky='ew', pady=(10, 0))
-
-        # Skip errors checkbox
-        skip_cb = ttk.Checkbutton(
-            options_frame,
-            text="Skip files with errors",
-            variable=self.skip_errors
-        )
-        skip_cb.pack(side='left')
 
         # Summary label
         valid_count = sum(1 for m in self.file_mappings if not m.get('error'))
@@ -225,7 +216,5 @@ class BatchPreviewDialog(tk.Toplevel):
         if not self.result:
             return []
 
-        if self.skip_errors.get():
-            return [m for m in self.file_mappings if not m.get('error')]
-
-        return self.file_mappings
+        # Files with errors have no valid target name, so they are always skipped
+        return [m for m in self.file_mappings if not m.get('error')]
