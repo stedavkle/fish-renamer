@@ -99,8 +99,8 @@ CONFIG_SECTION_MISC = 'MISC'
 # ==============================================================================
 # Data File Names (defaults)
 # ==============================================================================
-DEFAULT_SPECIES_FILE = "Species_Indopacific 2026-02-22.csv"
+DEFAULT_SPECIES_FILE = "Species_Indopacific 2026-09-06.csv"
 DEFAULT_PHOTOGRAPHERS_FILE = "Photographers_all 2026-01-26.csv"
-DEFAULT_DIVESITES_FILE = "Divesites_Indopacific 2026-02-22.csv"
+DEFAULT_DIVESITES_FILE = "Divesites_Indopacific 2026-09-01.csv"
 DEFAULT_ACTIVITIES_FILE = "Activities.csv"
-DEFAULT_LABELS_FILE = "Labels 2026-02-22.json"
+DEFAULT_LABELS_FILE = "Labels 2026-07-04.json"
