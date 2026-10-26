@@ -908,7 +908,10 @@ class MainWindow(TkinterDnD.Tk):
 
                 preview = {'path': file_path, 'original': original, 'new': None, 'error': None}
 
-                file_date = date_map.get(os.path.normpath(file_path), "")
+                file_date = date_map.get(self.exiftool.path_key(file_path), "")
+                if not file_date:
+                    # Batch read can miss files (e.g. unparseable ExifTool output); retry individually
+                    file_date = self.exif.get_creation_date_str(file_path)
                 if not file_date:
                     preview['error'] = 'No EXIF date'
                 else:

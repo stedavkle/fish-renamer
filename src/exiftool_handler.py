@@ -16,6 +16,7 @@ import tempfile
 import zipfile
 import urllib.request
 import json
+import unicodedata
 import threading
 import atexit
 from pathlib import Path
@@ -544,7 +545,7 @@ class ExifToolHandler:
             progress_callback: Optional callback function(current, total) for progress updates
 
         Returns:
-            Dict mapping file_path to formatted date string ('YYYY-MM-DD_HH-MM-SS')
+            Dict mapping path_key(file_path) to formatted date string ('YYYY-MM-DD_HH-MM-SS')
             Files without valid dates are omitted from the result.
         """
         if not self.is_available() or not file_paths:
@@ -558,6 +559,9 @@ class ExifToolHandler:
             batch = file_paths[i:i + self.BATCH_SIZE]
             batch_results = self._read_creation_dates_batch(batch)
             results.update(batch_results)
+            if len(batch_results) < len(batch):
+                missing = [os.path.basename(p) for p in batch if self.path_key(p) not in batch_results]
+                logger.warning(f"ExifTool batch returned no date for {len(missing)} file(s): {missing}")
 
             # Report progress after each batch
             if progress_callback:
@@ -565,6 +569,12 @@ class ExifToolHandler:
                 progress_callback(processed, total)
 
         return results
+
+    @staticmethod
+    def path_key(file_path: str) -> str:
+        """Key for batch results. NFC-normalized because macOS may hand out
+        decomposed (NFD) umlauts while ExifTool echoes them composed, or vice versa."""
+        return unicodedata.normalize('NFC', os.path.normpath(file_path))
 
     def _read_creation_dates_batch(self, file_paths: List[str]) -> Dict[str, str]:
         """Read creation dates from a single batch of files.
@@ -598,9 +608,9 @@ class ExifToolHandler:
                 try:
                     data = json.loads(json_str, strict=False)
                     for entry in data:
-                        file_path = os.path.normpath(entry.get("SourceFile", ""))
-                        if not file_path:
+                        if not entry.get("SourceFile"):
                             continue
+                        file_path = self.path_key(entry["SourceFile"])
 
                         # Try DateTimeOriginal first, then CreateDate, then ModifyDate
                         date_str = (
