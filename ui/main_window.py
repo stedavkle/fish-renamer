@@ -675,11 +675,21 @@ class MainWindow(TkinterDnD.Tk):
     def _show_preferences(self):
         """Open the preferences and updates dialog window.
 
-        Creates a modal preferences window where users can configure data file
-        locations and update data from HiDrive.
+        Opens a non-modal preferences window where users can configure data file
+        locations and update data from HiDrive. Deferred with after() because on
+        macOS a window opened inside a native menu callback gets no input until
+        the callback returns.
         """
+        self.after(0, self._open_preferences)
+
+    def _open_preferences(self):
+        """Create the preferences window, or raise it if it is already open."""
+        prefs_win = getattr(self, 'prefs_win', None)
+        if prefs_win is not None and prefs_win.winfo_exists():
+            prefs_win.lift()
+            prefs_win.focus_force()
+            return
         self.prefs_win = PreferencesWindow(self, self.config_manager, self.web_updater)
-        self.wait_window(self.prefs_win)
 
     def _is_preview_enabled(self):
         """Check if renaming preview is enabled in preferences.

@@ -22,10 +22,7 @@ class PreferencesWindow(tk.Toplevel):
 
         self.remote_filelist = []
         self._build_ui()
-
-        # Grab input after window is fully mapped (prevents macOS freeze)
-        self.wait_visibility()
-        self.grab_set()
+        # No wait_visibility()/grab_set(): both block or swallow input on recent macOS versions
 
     def _build_ui(self):
         main_frame = ttk.Frame(self, padding="10")
@@ -53,11 +50,12 @@ class PreferencesWindow(tk.Toplevel):
         preview_cb.grid(row=0, column=0, padx=5, pady=5, sticky='w')
 
         def on_location_change(event):
-            self.config_manager.set_misc('location', self.location_var.get())
-            if event == "All":
+            location = self.location_var.get()
+            self.config_manager.set_misc('location', location)
+            if location == "All":
                 self.master.data.filter_by_location()
             else:
-                self.master.data.filter_by_location(event)
+                self.master.data.filter_by_location(location)
             self.master.update_all_comboboxes()
 
         # Get dynamic location list from data, ensure 'All' is first
@@ -66,9 +64,12 @@ class PreferencesWindow(tk.Toplevel):
             locations.remove('All')
         locations = ['All'] + locations
 
-        current_location = self.config_manager.get_misc('location', 'All')
+        current_location = self.config_manager.get_misc('location', 'All') or 'All'
         self.location_var.set(current_location)
-        self.location_menu = ttk.OptionMenu(location_frame, self.location_var, current_location, *locations, command=on_location_change)
+        # Readonly Combobox instead of OptionMenu: Tk popup menus don't react on recent macOS
+        self.location_menu = ttk.Combobox(location_frame, textvariable=self.location_var,
+                                          values=locations, state='readonly')
+        self.location_menu.bind('<<ComboboxSelected>>', on_location_change)
         self.location_menu.grid(row=0, column=0, padx=5, pady=5, sticky='ew')
 
 
