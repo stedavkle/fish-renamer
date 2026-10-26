@@ -1,16 +1,85 @@
 # filename_assembler.py
-import re
 import os
 import logging
-from typing import Optional, List, Tuple
+from typing import NamedTuple, Optional, List, Tuple
 from .constants import (
-    PATTERN_BASIC_FILENAME,
-    PATTERN_IDENTITY_FILENAME,
-    PATTERN_BASIC_BASENAME,
-    PATTERN_DATETIME_IN_FILENAME
+    PATTERN_DATE_FIELD,
+    PATTERN_TIME_FIELD,
+    PATTERN_GPS_MARKER,
+    BASIC_DATE_INDEX,
+    IDENTITY_DATE_INDEX
 )
 
 logger = logging.getLogger(__name__)
+
+FIELD_NAMES = ['family', 'genus', 'species', 'confidence', 'phase', 'colour', 'behaviour',
+               'author', 'site', 'date', 'time', 'activity', 'camera', 'original name']
+
+
+class ParsedName(NamedTuple):
+    """A Basic or Identity filename (without extension) split into its parts."""
+    format: str    # 'basic' or 'identity'
+    fields: tuple  # 14 slots, see FIELD_NAMES; slots 0-6 are None for basic names
+    gps: str       # 'N', 'G' or '' (legacy name without marker)
+    tail: str      # free user text after the marker, kept verbatim
+    body: str      # the name up to and including the original name (no marker)
+
+    @property
+    def gps_suffix(self) -> str:
+        """Marker plus free text in the current format, e.g. '_N_' or '_G_two fish'."""
+        return f"_{self.gps}_{self.tail}" if self.gps else ''
+
+
+def parse_filename(stem: str) -> Tuple[Optional[ParsedName], str]:
+    """Split a filename (without extension) into fields by position.
+
+    Field contents are not checked against the data lists, so old sites, former
+    photographers, 'Labridae-Sc' or 'species3' all pass. Only the date and time
+    fields must be well-formed, because they anchor the positions.
+
+    Returns:
+        (ParsedName, '') on success, (None, reason) otherwise
+    """
+    parts = stem.split('_')
+
+    def has_datetime_at(i):
+        return (len(parts) > i + 1 and PATTERN_DATE_FIELD.match(parts[i])
+                and PATTERN_TIME_FIELD.match(parts[i + 1]))
+
+    # Basic first: an Identity name never has a date at the Basic position,
+    # but a Basic name's free text could contain one at the Identity position
+    if has_datetime_at(BASIC_DATE_INDEX):
+        fmt, date_index = 'basic', BASIC_DATE_INDEX
+    elif has_datetime_at(IDENTITY_DATE_INDEX):
+        fmt, date_index = 'identity', IDENTITY_DATE_INDEX
+    else:
+        found = next((i for i in range(len(parts)) if has_datetime_at(i)), None)
+        if found is None:
+            return None, 'No date_time (YYYY-MM-DD_HH-MM-SS) in name'
+        return None, (f"Date is field {found + 1}, expected field {BASIC_DATE_INDEX + 1} (Basic) "
+                      f"or {IDENTITY_DATE_INDEX + 1} (Identity) - missing or extra '_'?")
+
+    # Fields before the date, then date, time, activity, camera, rest
+    rest_index = date_index + 4
+    rest = '_'.join(parts[rest_index:])
+    if not rest:
+        return None, 'Missing activity, camera or original name after date_time'
+
+    marker = PATTERN_GPS_MARKER.match(rest)
+    if marker:
+        original = marker.group('original')
+        gps = marker.group('gps')
+        tail = marker.group('tail') if marker.group('tail') is not None else (marker.group('legacy_tail') or '')
+    else:
+        original, gps, tail = rest, '', ''
+
+    if fmt == 'identity':
+        fields = tuple(parts[:3] + parts[4:rest_index]) + (original,)
+    else:
+        fields = (None,) * 7 + tuple(parts[:rest_index]) + (original,)
+    body = '_'.join(parts[:rest_index] + [original])
+    return ParsedName(fmt, fields, gps, tail, body), ''
+
 
 class FilenameAssembler:
     """Contains all logic for validating and assembling new filenames."""
@@ -19,122 +88,42 @@ class FilenameAssembler:
         self.data = data_manager
 
     def is_already_processed(self, filename: str) -> bool:
-        """Checks if a filename matches the basic or full processed format."""
-        return PATTERN_BASIC_FILENAME.match(filename) is not None
+        """Checks if a filename is already in Basic or Identity format."""
+        return parse_filename(filename)[0] is not None
 
-    def analyze_files_for_editing(self, filenames: List[str]) -> Tuple[list, list]:
+    def analyze_files_for_editing(self, filenames: List[str]) -> Tuple[str, list, list]:
         """
         Parses a list of filenames to find which metadata fields are identical across all files.
 
         Args:
-            filenames: List of filenames to analyze
+            filenames: List of filenames without extension (all Basic or all Identity)
 
         Returns:
-            Tuple of (is_same_flags, common_values) as lists
+            Tuple of (format, is_same_flags, common_values); the lists have 14
+            elements (see FIELD_NAMES), taxonomy slots are never 'same' for Basic
 
         Raises:
-            ValueError: If filenames don't match identity pattern
+            ValueError: If a filename can't be parsed or formats are mixed
         """
         if not filenames:
             raise ValueError("No filenames provided for analysis")
 
         parsed_info = []
         for filename in filenames:
-            basename = os.path.basename(os.path.splitext(filename)[0])
-            match = self.regex_match_identity(basename)
-
-            if not match:
-                logger.error(f"Filename does not match identity pattern: '{basename}'")
-                raise ValueError(f"Invalid filename format: '{basename}'")
-
-            parsed_info.append(match.groups())
-
-        try:
-            first = parsed_info[0]
-            num_fields = len(first)
-            is_same = [all(row[i] == first[i] for row in parsed_info) for i in range(num_fields)]
-            values = [first[i] if is_same[i] else None for i in range(num_fields)]
-            return is_same, values
-        except (IndexError, ValueError) as e:
-            logger.error(f"Error analyzing files for editing: {e}")
-            raise ValueError(f"Failed to analyze filenames: {e}")
-
-    def analyze_basic_files_for_editing(self, filenames: List[str]) -> Tuple[list, list]:
-        """
-        Parses a list of Basic format filenames to find which metadata fields are identical.
-
-        Args:
-            filenames: List of Basic format filenames to analyze
-
-        Returns:
-            Tuple of (is_same_flags, common_values) as lists with 14 elements
-            to match the Identity format structure (first 7 are None/False for taxonomy)
-
-        Raises:
-            ValueError: If filenames don't match basic pattern
-        """
-        if not filenames:
-            raise ValueError("No filenames provided for analysis")
-
-        parsed_info = []
-        for filename in filenames:
-            basename = os.path.basename(os.path.splitext(filename)[0])
-
-            # Remove _G or _N suffix if present
-            if basename.endswith('_G') or basename.endswith('_N'):
-                basename = basename[:-2]
-
-            # Parse Basic format: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
-            parts = basename.split('_')
-            if len(parts) < 7:
-                raise ValueError(f"Invalid basic format: '{basename}'")
-
-            author_code = parts[0]
-            site_string = parts[1]
-            date = parts[2]
-            time = parts[3]
-            activity = parts[4]
-            camera = parts[5]
-            original_name = '_'.join(parts[6:])  # Rest is original name
-
-            # Create tuple matching Identity format structure (14 elements)
-            # [0-6: taxonomy (None), 7: author, 8: site, 9: date, 10: time, 11: activity, 12: camera, 13: original]
-            parsed = (None, None, None, None, None, None, None,
-                     author_code, site_string, date, time, activity, camera, original_name)
+            parsed, error = parse_filename(filename)
+            if not parsed:
+                raise ValueError(f"'{filename}': {error}")
             parsed_info.append(parsed)
 
-        try:
-            first = parsed_info[0]
-            is_same = [False] * 14
+        fmt = parsed_info[0].format
+        if any(p.format != fmt for p in parsed_info):
+            raise ValueError("Mixed Basic and Identity files - edit them separately")
 
-            # Check which fields are the same across all files (skip taxonomy fields 0-6)
-            for i in range(7, 14):
-                if all(row[i] == first[i] for row in parsed_info):
-                    is_same[i] = True
-
-            values = [first[i] if is_same[i] else None for i in range(14)]
-            return is_same, values
-        except (IndexError, ValueError) as e:
-            logger.error(f"Error analyzing basic files for editing: {e}")
-            raise ValueError(f"Failed to analyze basic filenames: {e}")
-
-    def regex_match_basic(self, filename):
-        """Match basic filename pattern."""
-        return PATTERN_BASIC_FILENAME.match(filename)
-
-    def regex_match_identity(self, filename):
-        """Match identity filename pattern.
-
-        Returns match object with groups:
-        1: Family, 2: Genus, 3: species, 4: confidence, 5: phase,
-        6: colour, 7: behaviour, 8: author, 9: site, 10: date,
-        11: time, 12: activity, 13: camera, 14: original name
-        """
-        return PATTERN_IDENTITY_FILENAME.match(filename)
-
-    def regex_match_datetime_filename(self, filename):
-        """Extract datetime from filename."""
-        return PATTERN_DATETIME_IN_FILENAME.match(filename)
+        first = parsed_info[0].fields
+        is_same = [first[i] is not None and all(p.fields[i] == first[i] for p in parsed_info)
+                   for i in range(len(first))]
+        values = [first[i] if is_same[i] else None for i in range(len(first))]
+        return fmt, is_same, values
 
     def assemble_basic_filename(self, original_filename: str, file_date: str, author_name: str,
                                 site_tuple: Tuple[str, str], activity: str, camera: str) -> Optional[str]:
@@ -152,7 +141,7 @@ class FilenameAssembler:
             Assembled filename, or None if already processed or missing required data
         """
         # Check if already processed
-        if self.regex_match_basic(original_filename) or self.regex_match_identity(original_filename):
+        if self.is_already_processed(original_filename):
             logger.info(f"File already processed: '{original_filename}'")
             return None
 
@@ -179,8 +168,8 @@ class FilenameAssembler:
         # Sanitize original name by removing underscores
         sanitized_original = original_filename.replace('_', '')
 
-        # Append _N to indicate no GPS data (will be replaced with _G when GPS is added)
-        return f"{author_code}_{site_string}_{file_date}_{activity}_{camera}_{sanitized_original}_N"
+        # Append _N_ to indicate no GPS data (will be replaced with _G_ when GPS is added)
+        return f"{author_code}_{site_string}_{file_date}_{activity}_{camera}_{sanitized_original}_N_"
 
     def assemble_identity_filename(self, existing_filename: str, family: str, genus: str,
                                    species: str, confidence: str, phase: str, colour: str,
@@ -201,24 +190,18 @@ class FilenameAssembler:
             Assembled identity filename, or None if invalid or already processed
         """
         # Check if already has identity or if not basic format
-        if self.regex_match_identity(existing_filename):
+        parsed, error = parse_filename(existing_filename)
+        if not parsed:
+            logger.warning(f"File is not in basic format: '{existing_filename}': {error}")
+            return None
+
+        if parsed.format == 'identity':
             logger.info(f"File already has identity: '{existing_filename}'")
             return None
 
-        if not self.regex_match_basic(existing_filename):
-            logger.warning(f"File is not in basic format: '{existing_filename}'")
-            return None
-
-        # Extract base name from basic filename
-        base_name_match = PATTERN_BASIC_BASENAME.search(existing_filename)
-        if not base_name_match:
-            logger.error(f"Failed to extract base name from: '{existing_filename}'")
-            return None
-
-        base_name = base_name_match.group(1)
-        # Strip existing GPS suffix (_N or _G) — it will be re-appended
-        if base_name.endswith('_N') or base_name.endswith('_G'):
-            base_name = base_name[:-2]
+        # Basic fields without GPS marker; marker and free text are re-appended
+        base_name = '_'.join(parsed.fields[7:])
+        gps_suffix = f"_{parsed.gps or 'N'}_{parsed.tail}"
         colour_code = colour
         behaviour_code = behaviour
 
@@ -236,8 +219,7 @@ class FilenameAssembler:
             logger.warning(f"Missing essential info for identity rename: {', '.join(missing)}")
             return None
 
-        # Append _N to indicate no GPS data (will be replaced with _G when GPS is added)
-        return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour_code}_{behaviour_code}_{base_name}_N"
+        return f"{family}_{genus}_{species}_B_{confidence}_{phase}_{colour_code}_{behaviour_code}_{base_name}{gps_suffix}"
     
     def assemble_edited_filename(self, family: str, genus: str, species: str, confidence: str, phase: str, colour: str, behaviour: str, author_code: str, site_string: str, date: str, time: str, activity: str, camera: str, filename: str, extension: str) -> str:
         """
@@ -264,35 +246,3 @@ class FilenameAssembler:
             Complete filename with extension
         """
         return f"{author_code}_{site_string}_{date}_{time}_{activity}_{camera}_{filename}{extension}"
-
-    def extract_site_string(self, filename: str) -> Optional[str]:
-        """Extract site string from Basic or Identity format filename.
-
-        Args:
-            filename: Filename without extension
-
-        Returns:
-            Site string (e.g., 'IDN-Bangka-BTI') or None if not found
-        """
-        # Remove _G or _N suffix if present
-        clean_filename = filename
-        if filename.endswith('_G') or filename.endswith('_N'):
-            clean_filename = filename[:-2]
-
-        # Try Identity format first (more specific)
-        match = PATTERN_IDENTITY_FILENAME.match(clean_filename)
-        if match:
-            return match.group(9)  # Site string is group 9
-
-        # Try Basic format
-        match = PATTERN_BASIC_FILENAME.match(clean_filename)
-        if match:
-            # Basic format: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
-            parts = clean_filename.split('_')
-            if len(parts) >= 2:
-                potential_site = parts[1]
-                # Validate site string format: XXX-Name-XXX
-                if re.match(r'^[A-Z]{3}-[A-Za-z]+-[A-Z0-9]{3}$', potential_site):
-                    return potential_site
-
-        return None

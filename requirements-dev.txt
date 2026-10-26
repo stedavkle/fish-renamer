@@ -9,3 +9,4 @@ pyinstaller
 nuitka
 tkinter-tooltip
 pillow-heif
+pytest

@@ -29,46 +29,27 @@ TREE_COLUMNS = ['Family', 'Genus', 'Species', 'Species English']
 # Filename Regex Patterns (compiled for performance)
 # ==============================================================================
 
-# Basic filename pattern: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
-# Example: ABCDE_ABC-Location-123_2024-01-15_14-30-45_diving_S-A7IV_IMG001.JPG
-# Supports optional _N (no GPS) or _G (GPS present) suffix
-PATTERN_BASIC_FILENAME = re.compile(
-    r'^[A-Za-z]{5}_'                    # Author code (5 letters)
-    r'[A-Z]{3}-[A-Za-z]+-[A-Z0-9]{3}_'  # Site string
-    r'\d{4}-\d{2}-\d{2}_'               # Date (YYYY-MM-DD)
-    r'\d{2}-\d{2}-\d{2}_'               # Time (HH-MM-SS)
-    r'[A-Za-z]+_'                       # Activity
-    r'[A-Z]-[A-Za-z0-9]+_'              # Camera (REQUIRED: uppercase-alphanumeric)
-    r'[A-Za-z0-9]+'                     # Original filename
-    r'(?:_[NG])?$'                      # Optional _N or _G suffix
-)
+# Filenames are parsed by field position (fields are separated by '_'), not by
+# checking field contents. Only date and time are validated. See
+# filename_assembler.parse_filename().
+#
+# Basic:    Author_Site_Date_Time_Activity_Camera_Original_N_[free text]
+#           ABCDE_IDN-Bangka-HRS_2024-01-15_14-30-45_dive_S-A7IV_IMG001_N_
+# Identity: Family_Genus_Species_B_Conf_Phase_Colour_Behaviour_ + Basic
+#           Labridae-Sc_Scarus_species3_B_ok_ad_ty_zz_ABCDE_IDN-Bangka-HRS_..._IMG001_G_
+# _N_ = no GPS in EXIF yet, _G_ = GPS written. Anything after the marker is
+# free user text and is never checked or changed. Legacy names end in a bare
+# _N/_G (or have no marker) and are still accepted.
+PATTERN_DATE_FIELD = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+PATTERN_TIME_FIELD = re.compile(r'^\d{2}-\d{2}-\d{2}$')
 
-# Identity filename pattern: Full taxonomy + basic fields
-# Example: Pomacentridae_Amphiprion_clarkii_B_ok_ad_ty_zz_ABCDE_ABC-Location-123_2024-01-15_14-30-45_diving_S-A7IV_IMG001
-# Supports optional _N (no GPS) or _G (GPS present) suffix
-PATTERN_IDENTITY_FILENAME = re.compile(
-    r'(0?\-?[A-Za-z]*)_'                       # Family (group 1)
-    r'([A-Za-z]+)_'                            # Genus (group 2)
-    r'([a-z]+)_'                               # Species (group 3)
-    r'[A-Z]_'                                  # Separator 'B'
-    r'([a-z]{2})_'                             # Confidence (group 4)
-    r'([A-Za-z]+)_'                            # Phase (group 5)
-    r'([A-Za-z\-]+)_'                          # Colour (group 6)
-    r'([A-Za-z\-]+)_'                          # Behaviour (group 7)
-    r'([A-Za-z]{5})_'                          # Author code (group 8)
-    r'([A-Z]{3}-[A-Za-z]+-[A-Z0-9]{3})_'       # Site string (group 9)
-    r'(\d{4}-\d{2}-\d{2})_'                    # Date (group 10)
-    r'(\d{2}-\d{2}-\d{2})_'                    # Time (group 11)
-    r'([A-Za-z]+)_'                            # Activity (group 12)
-    r'([A-Z]-[A-Za-z0-9]+)_'                   # Camera (group 13, REQUIRED)
-    r'(.*?)'                                   # Original name (group 14)
-    r'(?:_[NG])?$'                             # Optional _N or _G suffix (non-capturing)
-)
+# Field positions (0-based) of the date in each format
+BASIC_DATE_INDEX = 2
+IDENTITY_DATE_INDEX = 10
 
-# Pattern to extract base name from identity filename
-PATTERN_BASIC_BASENAME = re.compile(
-    r'([A-Za-z]{5}_.*?_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_.*)'
-)
+# Splits the part after the camera field into original name, GPS marker and
+# free text: 'IMG001_N_', 'IMG001_G_two fish', legacy 'IMG001_N' / 'IMG001_N copy'
+PATTERN_GPS_MARKER = re.compile(r'^(?P<original>.+?)_(?P<gps>[NG])(?:_(?P<tail>.*)|(?P<legacy_tail> .*))?$')
 
 # Pattern to extract datetime from filename
 PATTERN_DATETIME_IN_FILENAME = re.compile(

@@ -10,7 +10,7 @@ from tktooltip import ToolTip
 # Import refactored components
 from src.config_manager import ConfigManager
 from src.data_manager import DataManager
-from src.filename_assembler import FilenameAssembler
+from src.filename_assembler import FilenameAssembler, parse_filename
 from src.exif_handler import ExifHandler
 from src.exiftool_handler import ExifToolHandler
 from src.web_updater import WebUpdater
@@ -745,23 +745,9 @@ class MainWindow(TkinterDnD.Tk):
         self.files_to_edit = files  # Store full paths for later
         basenames = [os.path.splitext(os.path.basename(f))[0] for f in files]
 
-        # Detect file format (Basic or Identity)
-        first_basename = basenames[0]
-        is_identity_format = self.assembler.regex_match_identity(first_basename) is not None
-        is_basic_format = self.assembler.regex_match_basic(first_basename) is not None
-
+        # Detect file format (Basic or Identity) and common fields
         try:
-            if is_identity_format:
-                # Use Identity format analysis
-                is_same, values = self.assembler.analyze_files_for_editing(basenames)
-                self.editing_format = 'identity'
-            elif is_basic_format:
-                # Use Basic format analysis
-                is_same, values = self.assembler.analyze_basic_files_for_editing(basenames)
-                self.editing_format = 'basic'
-            else:
-                self._warn("Files are not in Basic or Identity format.")
-                return
+            self.editing_format, is_same, values = self.assembler.analyze_files_for_editing(basenames)
         except ValueError as e:
             self._warn(f"Error analyzing files: {e}")
             return
@@ -783,7 +769,8 @@ class MainWindow(TkinterDnD.Tk):
         if self.editing_format == 'identity':
             for i, field in zip([3, 4, 5, 6], ['Confidence', 'Phase', 'Colour', 'Behaviour']):
                 if ui_values[i] is not None:
-                    ui_values[i] = self.data.labels[field][str(ui_values[i])]
+                    # Unknown abbreviations are shown (and kept) as-is
+                    ui_values[i] = self.data.labels.get(field, {}).get(str(ui_values[i]), ui_values[i])
 
         # Convert camera abbreviation to full name
         if ui_values[10] is not None:  # Camera is now at index 10
@@ -1041,13 +1028,18 @@ class MainWindow(TkinterDnD.Tk):
 
             preview = {'path': file_path, 'original': original, 'new': None, 'error': None}
 
+            parsed, parse_error = parse_filename(name)
             new_name = self.assembler.assemble_identity_filename(
                 name, family, genus, species, confidence, phase, colour, behaviour
             )
             if new_name:
                 preview['new'] = new_name + ext
+            elif not parsed:
+                preview['error'] = parse_error
+            elif parsed.format == 'identity':
+                preview['error'] = 'Already identified (use Edit)'
             else:
-                preview['error'] = 'Invalid format'
+                preview['error'] = 'Missing identification fields'
 
             previews.append(preview)
         return previews
@@ -1134,41 +1126,23 @@ class MainWindow(TkinterDnD.Tk):
     def _construct_gps_filename(self, filename_without_ext):
         """Construct filename with GPS marker at the end.
 
-        New format:
-        - Identity: Family_Genus_Species_B_conf_phase_colour_behav_Author_Site_Date_Time_Activity_Camera_Filename_G
-        - Basic: Author_Site_Date_Time_Activity_Camera_Filename_G
+        Format:
+        - Identity: Family_Genus_Species_B_conf_phase_colour_behav_Author_Site_Date_Time_Activity_Camera_Filename_G_
+        - Basic: Author_Site_Date_Time_Activity_Camera_Filename_G_
 
-        If _G already exists at end, this is idempotent (no change).
-        If _N exists at end, replace it with _G.
+        _N_ (or legacy _N) becomes _G_, a missing marker is added, and free
+        text after the marker is kept. Idempotent for names already ending in _G_.
 
         Args:
             filename_without_ext: Filename without extension
 
         Returns:
-            New filename with GPS marker at end, or None if format is invalid
+            New filename with GPS marker, or None if format is invalid
         """
-        # Check if _G already exists at the end
-        if filename_without_ext.endswith('_G'):
-            return filename_without_ext  # Already has GPS marker
-
-        # Check if _N exists at the end - replace with _G
-        if filename_without_ext.endswith('_N'):
-            return filename_without_ext[:-2] + '_G'
-
-        # Try Identity format first
-        match = self.assembler.regex_match_identity(filename_without_ext)
-        if match:
-            # Append _G to end (for legacy files without _N)
-            return f"{filename_without_ext}_G"
-
-        # Try Basic format
-        match = self.assembler.regex_match_basic(filename_without_ext)
-        if match:
-            # Append _G to end (for legacy files without _N)
-            return f"{filename_without_ext}_G"
-
-        # Invalid format
-        return None
+        parsed, _ = parse_filename(filename_without_ext)
+        if not parsed:
+            return None
+        return f"{parsed.body}_G_{parsed.tail}"
 
     def _generate_previews_exif(self, files):
         """Generate preview data for EXIF GPS writing.
@@ -1209,12 +1183,13 @@ class MainWindow(TkinterDnD.Tk):
                 previews.append(preview)
                 continue
 
-            # Extract site string from filename
-            site_string = self.assembler.extract_site_string(name)
-            if not site_string:
-                preview['error'] = 'Invalid filename format'
+            # Extract site string from filename (by position, not checked against the list)
+            parsed, parse_error = parse_filename(name)
+            if not parsed:
+                preview['error'] = parse_error
                 previews.append(preview)
                 continue
+            site_string = parsed.fields[8]
 
             preview['site_string'] = site_string
 
@@ -1694,8 +1669,9 @@ class MainWindow(TkinterDnD.Tk):
         # reverse lookup
         if colour: self.cb_colour.set(colour)
         if behaviour: self.cb_behaviour.set(behaviour)
-        if author: self.cb_author.set(self.data.get_user_name(author))
-        if site: self.cb_site.set(self.data.get_divesite_area_site(site))
+        # Codes missing from the current lists are shown as-is
+        if author: self.cb_author.set(self.data.get_user_name(author) or author)
+        if site: self.cb_site.set(self.data.get_divesite_area_site(site) or site)
         if activity: self.cb_activity.set(activity)
         if camera: self.cb_camera.set(camera)
 
@@ -1951,81 +1927,11 @@ class MainWindow(TkinterDnD.Tk):
 
             preview = {'path': file_path, 'original': original, 'new': None, 'error': None}
 
-            # Capture GPS suffix before parsing strips it
-            gps_suffix = ''
-            if basename.endswith('_G') or basename.endswith('_N'):
-                gps_suffix = basename[-2:]
-
-            if self.editing_format == 'identity':
-                # Parse Identity format filename
-                match = self.assembler.regex_match_identity(basename)
-                if not match:
-                    preview['error'] = 'Invalid format'
-                    previews.append(preview)
-                    continue
-
-                info = match.groups()
-
-                # Build new filename from edited/original fields
-                edited_fields = self._collect_edited_fields(info)
-                edited_fields['filename'] += gps_suffix
-
-                new_filename = self.assembler.assemble_edited_filename(
-                    edited_fields['family'],
-                    edited_fields['genus'],
-                    edited_fields['species'],
-                    edited_fields['confidence'],
-                    edited_fields['phase'],
-                    edited_fields['colour'],
-                    edited_fields['behaviour'],
-                    edited_fields['author_code'],
-                    edited_fields['site_string'],
-                    edited_fields['date'],
-                    edited_fields['time'],
-                    edited_fields['activity'],
-                    edited_fields['camera'],
-                    edited_fields['filename'],
-                    extension
-                )
-
-            elif self.editing_format == 'basic':
-                # Parse Basic format filename: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
-                # Remove _G or _N suffix if present (already captured in gps_suffix above)
-                clean_basename = basename[:-2] if gps_suffix else basename
-                parts = clean_basename.split('_')
-                if len(parts) < 7:
-                    preview['error'] = 'Invalid format'
-                    previews.append(preview)
-                    continue
-
-                # Create info tuple matching Identity format structure (14 elements)
-                # [0-6: taxonomy (None), 7: author, 8: site, 9: date, 10: time, 11: activity, 12: camera, 13: original]
-                info = (None, None, None, None, None, None, None,
-                       parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], '_'.join(parts[6:]))
-
-                # Build new filename from edited/original fields
-                edited_fields = self._collect_edited_fields(info)
-                edited_fields['filename'] += gps_suffix
-
-                new_filename = self.assembler.assemble_edited_basic_filename(
-                    edited_fields['author_code'],
-                    edited_fields['site_string'],
-                    edited_fields['date'],
-                    edited_fields['time'],
-                    edited_fields['activity'],
-                    edited_fields['camera'],
-                    edited_fields['filename'],
-                    extension
-                )
+            new_filename, error = self._build_edited_filename(basename, extension)
+            if error:
+                preview['error'] = error
             else:
-                preview['error'] = 'Unknown format'
-                previews.append(preview)
-                continue
-
-            if new_filename:
                 preview['new'] = new_filename
-            else:
-                preview['error'] = 'Failed to generate name'
 
             previews.append(preview)
         return previews
@@ -2042,69 +1948,8 @@ class MainWindow(TkinterDnD.Tk):
             filepath, extension = os.path.splitext(file_path)
             basename = os.path.basename(filepath)
 
-            # Capture GPS suffix before parsing strips it
-            gps_suffix = ''
-            if basename.endswith('_G') or basename.endswith('_N'):
-                gps_suffix = basename[-2:]
-
-            if self.editing_format == 'identity':
-                # Parse Identity format filename
-                match = self.assembler.regex_match_identity(basename)
-                if not match:
-                    return False
-
-                info = match.groups()
-
-                # Build new filename from edited/original fields
-                edited_fields = self._collect_edited_fields(info)
-                edited_fields['filename'] += gps_suffix
-
-                new_filename = self.assembler.assemble_edited_filename(
-                    edited_fields['family'],
-                    edited_fields['genus'],
-                    edited_fields['species'],
-                    edited_fields['confidence'],
-                    edited_fields['phase'],
-                    edited_fields['colour'],
-                    edited_fields['behaviour'],
-                    edited_fields['author_code'],
-                    edited_fields['site_string'],
-                    edited_fields['date'],
-                    edited_fields['time'],
-                    edited_fields['activity'],
-                    edited_fields['camera'],
-                    edited_fields['filename'],
-                    extension
-                )
-
-            elif self.editing_format == 'basic':
-                # Parse Basic format filename: AuthorCode_SiteString_Date_Time_Activity_Camera_OriginalName
-                # Remove _G or _N suffix if present (already captured in gps_suffix above)
-                clean_basename = basename[:-2] if gps_suffix else basename
-                parts = clean_basename.split('_')
-                if len(parts) < 7:
-                    return False
-
-                # Create info tuple matching Identity format structure (14 elements)
-                # [0-6: taxonomy (None), 7: author, 8: site, 9: date, 10: time, 11: activity, 12: camera, 13: original]
-                info = (None, None, None, None, None, None, None,
-                       parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], '_'.join(parts[6:]))
-
-                # Build new filename from edited/original fields
-                edited_fields = self._collect_edited_fields(info)
-                edited_fields['filename'] += gps_suffix
-
-                new_filename = self.assembler.assemble_edited_basic_filename(
-                    edited_fields['author_code'],
-                    edited_fields['site_string'],
-                    edited_fields['date'],
-                    edited_fields['time'],
-                    edited_fields['activity'],
-                    edited_fields['camera'],
-                    edited_fields['filename'],
-                    extension
-                )
-            else:
+            new_filename, error = self._build_edited_filename(basename, extension)
+            if error:
                 return False
 
             from pathlib import Path
@@ -2155,6 +2000,56 @@ class MainWindow(TkinterDnD.Tk):
             self._warn(f"Error editing {os.path.basename(file_path)}: {e}")
             return False
 
+    def _build_edited_filename(self, basename, extension):
+        """Build the new name for one file in Edit mode.
+
+        Fields are taken by position; edited fields come from the UI, all others
+        (including unknown or outdated values) are kept. The GPS marker is
+        written in the current _N_/_G_ form and free text after it is kept.
+
+        Returns:
+            (new_filename, '') or (None, reason)
+        """
+        parsed, error = parse_filename(basename)
+        if not parsed:
+            return None, error
+        if parsed.format != self.editing_format:
+            return None, f"Not a {self.editing_format.capitalize()} name"
+
+        edited_fields = self._collect_edited_fields(parsed.fields)
+        edited_fields['filename'] += parsed.gps_suffix
+
+        if parsed.format == 'identity':
+            new_filename = self.assembler.assemble_edited_filename(
+                edited_fields['family'],
+                edited_fields['genus'],
+                edited_fields['species'],
+                edited_fields['confidence'],
+                edited_fields['phase'],
+                edited_fields['colour'],
+                edited_fields['behaviour'],
+                edited_fields['author_code'],
+                edited_fields['site_string'],
+                edited_fields['date'],
+                edited_fields['time'],
+                edited_fields['activity'],
+                edited_fields['camera'],
+                edited_fields['filename'],
+                extension
+            )
+        else:
+            new_filename = self.assembler.assemble_edited_basic_filename(
+                edited_fields['author_code'],
+                edited_fields['site_string'],
+                edited_fields['date'],
+                edited_fields['time'],
+                edited_fields['activity'],
+                edited_fields['camera'],
+                edited_fields['filename'],
+                extension
+            )
+        return new_filename, ''
+
     def _collect_edited_fields(self, info):
         """Collect edited fields from UI or keep original values.
 
@@ -2176,11 +2071,15 @@ class MainWindow(TkinterDnD.Tk):
         fields['genus'] = self.cb_genus.get() if self.fields_to_edit[1] else info[1]
         fields['species'] = self.cb_species.get() if self.fields_to_edit[2] else info[2]
 
-        # Attribute fields
-        fields['confidence'] = self.data.get_abbreviation_reverse('Confidence', self.cb_confidence.get()) if self.fields_to_edit[3] else info[3]
-        fields['phase'] = self.data.get_abbreviation_reverse('Phase', self.cb_phase.get()) if self.fields_to_edit[4] else info[4]
-        fields['colour'] = self.data.get_abbreviation_reverse('Colour', self.cb_colour.get()) if self.fields_to_edit[5] else info[5]
-        fields['behaviour'] = self.data.get_abbreviation_reverse('Behaviour', self.cb_behaviour.get()) if self.fields_to_edit[6] else info[6]
+        # Attribute fields (a value not in the labels was shown raw, so keep it raw)
+        def label_abbrev(category, combobox):
+            value = combobox.get()
+            return self.data.get_abbreviation_reverse(category, value) or value
+
+        fields['confidence'] = label_abbrev('Confidence', self.cb_confidence) if self.fields_to_edit[3] else info[3]
+        fields['phase'] = label_abbrev('Phase', self.cb_phase) if self.fields_to_edit[4] else info[4]
+        fields['colour'] = label_abbrev('Colour', self.cb_colour) if self.fields_to_edit[5] else info[5]
+        fields['behaviour'] = label_abbrev('Behaviour', self.cb_behaviour) if self.fields_to_edit[6] else info[6]
 
 
         # # Colour and behaviour (may need reverse lookup for abbreviations)
@@ -2203,7 +2102,7 @@ class MainWindow(TkinterDnD.Tk):
         # Author field
         if self.fields_to_edit[7]:
             author = self.cb_author.get()
-            fields['author_code'] = self.data.get_user_code(author)
+            fields['author_code'] = self.data.get_user_code(author) or author
         else:
             fields['author_code'] = info[7]
 
@@ -2227,7 +2126,7 @@ class MainWindow(TkinterDnD.Tk):
         # Camera field
         if self.fields_to_edit[12]:
             camera = self.cb_camera.get()
-            fields['camera'] = self.data.get_camera_abbreviation(camera)
+            fields['camera'] = self.data.get_camera_abbreviation(camera) or camera
         else:
             fields['camera'] = info[12]
 
