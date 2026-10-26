@@ -63,15 +63,22 @@ jobs:
           # Clean up temporary files
           Remove-Item -Path depends.zip, depends_temp -Recurse -Force
       
+      # Standalone folder instead of onefile: onefile unpacks itself to %TEMP% at
+      # every start, which Windows Defender flags. The folder runs in place.
       - name: Build with Nuitka
         run: |
-          python -m nuitka --onefile --output-dir=distx64nuitka --output-filename=daves-fish-renamer --windows-icon-from-ico=config/icon.png --include-data-dir="config=config" --enable-plugin=tk-inter --disable-ccache --windows-company-name="Dave" --windows-product-name="FishRenamer" --windows-file-version=${{ env.APP_VERSION }} --windows-product-version=${{ env.APP_VERSION }} main.py
-            
+          python -m nuitka --standalone --output-dir=distx64nuitka --output-filename=daves-fish-renamer --windows-icon-from-ico=config/icon.png --include-data-dir="config=config" --enable-plugin=tk-inter --disable-ccache --windows-company-name="Dave" --windows-product-name="FishRenamer" --windows-file-version=${{ env.APP_VERSION }} --windows-product-version=${{ env.APP_VERSION }} main.py
+
+      - name: Zip Windows app folder
+        run: |
+          Rename-Item distx64nuitka/main.dist daves-fish-renamer
+          Compress-Archive -Path distx64nuitka/daves-fish-renamer -DestinationPath distx64nuitka/daves-fish-renamer-windows.zip
+
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
         with:
           name: windows-executable
-          path: distx64nuitka/daves-fish-renamer.exe
+          path: distx64nuitka/daves-fish-renamer-windows.zip
           compression-level: 0
 
   build-macos:

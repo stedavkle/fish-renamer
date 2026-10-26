@@ -239,17 +239,16 @@ The codebase follows Python best practices:
 
 Download [UPX](https://upx.github.io/) for compression, then build with Nuitka or PyInstaller:
 
-**Nuitka** (recommended for performance):
+**Nuitka** (recommended for performance; this is what the release build uses):
 ```bash
-python -m nuitka --standalone --onefile --output-dir=distx64nuitka \
+python -m nuitka --standalone --output-dir=distx64nuitka \
+  --output-filename=daves-fish-renamer \
   --windows-icon-from-ico=config/icon.png \
   --include-data-dir="config=config" \
-  --windows-console-mode=disable \
-  --plugin-enable=upx \
-  --upx-binary="upx-5.0.0-win64/upx.exe" \
   --enable-plugin=tk-inter \
   main.py
 ```
+This produces the folder `distx64nuitka/main.dist`, which is shipped as a whole (zipped). Don't use `--onefile` or UPX: a onefile exe unpacks itself to `%TEMP%` on every start, and Windows Defender flags both.
 
 **PyInstaller**:
 ```bash
