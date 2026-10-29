@@ -4,6 +4,8 @@ from tkinter import ttk, font as tkFont
 from tkinterdnd2 import DND_FILES, TkinterDnD
 import os
 import logging
+import queue
+import threading
 from PIL import Image, ImageTk
 from tktooltip import ToolTip
 
@@ -581,28 +583,44 @@ class MainWindow(TkinterDnD.Tk):
             self._update_exiftool_status()
             return
 
-        # Windows: download and install with progress bar
+        # Windows: download and install with progress bar. The download runs in a
+        # background thread so the window keeps repainting. The thread never
+        # touches Tk: it posts to a queue that the main thread polls. Drops,
+        # undo, tabs and the ExifTool buttons stay blocked until it finishes.
+        self._processing = True
+        self._set_ui_enabled(False)
         self.exiftool_status_label.config(text="Installing...", foreground='orange')
         self.exiftool_download_label.config(text="Starting...")
         self.exiftool_progress['value'] = 0
         self.exiftool_progress.grid()
-        self.btn_install_exiftool.pack_forget()
-        self.btn_open_website.pack_forget()
-        self.update_idletasks()
 
-        def progress_callback(percent, message):
-            self.exiftool_progress['value'] = percent
-            self.exiftool_download_label.config(text=message)
-            self.update_idletasks()
+        events = queue.Queue()
 
-        success, message = self.exiftool.download_and_install(progress_callback)
+        def run_install():
+            result = self.exiftool.download_and_install(
+                lambda percent, message: events.put(('progress', percent, message))
+            )
+            events.put(('done', *result))
 
-        if success:
-            self._notice(message)
-        else:
-            self._warn(message)
+        def poll():
+            while not events.empty():
+                kind, value, message = events.get()
+                if kind == 'progress':
+                    self.exiftool_progress['value'] = value
+                    self.exiftool_download_label.config(text=message)
+                    continue
+                self._processing = False
+                self._set_ui_enabled(True)
+                if value:
+                    self._notice(message)
+                else:
+                    self._warn(message)
+                self._update_exiftool_status()
+                return
+            self.after(100, poll)
 
-        self._update_exiftool_status()
+        threading.Thread(target=run_install, daemon=True).start()
+        poll()
 
     def _open_exiftool_website(self):
         """Open the ExifTool website in the default browser."""
@@ -1444,7 +1462,8 @@ class MainWindow(TkinterDnD.Tk):
 
         # Disable/enable buttons
         buttons = [
-            'bt_rename', 'btn_install_exiftool', 'btn_open_website', 'btn_refresh_status'
+            'bt_rename', 'btn_install_exiftool', 'btn_open_website', 'btn_refresh_status',
+            'btn_update_exiftool'
         ]
         for btn_name in buttons:
             btn = getattr(self, btn_name, None)

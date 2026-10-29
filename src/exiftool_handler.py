@@ -14,13 +14,13 @@ import logging
 import re
 import tempfile
 import zipfile
-import urllib.request
 import json
 import unicodedata
 import threading
 import atexit
 from pathlib import Path
 from typing import Optional, Tuple, List, Dict
+import requests
 from src import app_utils
 
 logger = logging.getLogger(__name__)
@@ -270,10 +270,15 @@ class ExifToolHandler:
 
     @staticmethod
     def _fetch_exiftool_page() -> str:
-        """Fetch the exiftool.org HTML page (cached across calls in one session)."""
-        req = urllib.request.Request(EXIFTOOL_WEBSITE, headers={"User-Agent": "FishRenamer"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return resp.read().decode("utf-8", errors="replace")
+        """Fetch the exiftool.org HTML page (cached across calls in one session).
+
+        Uses requests rather than urllib: requests verifies HTTPS against the
+        bundled certifi CA file, while urllib in the macOS app build has no CA
+        certificates and fails with CERTIFICATE_VERIFY_FAILED.
+        """
+        resp = requests.get(EXIFTOOL_WEBSITE, headers={"User-Agent": "FishRenamer"}, timeout=15)
+        resp.raise_for_status()
+        return resp.content.decode("utf-8", errors="replace")
 
     @staticmethod
     def fetch_latest_version() -> Optional[str]:
@@ -362,10 +367,10 @@ class ExifToolHandler:
             zip_path = install_dir / "exiftool.zip"
 
             try:
-                req = urllib.request.Request(download_url, headers={"User-Agent": "FishRenamer"})
-                with urllib.request.urlopen(req, timeout=60) as resp:
-                    with open(zip_path, 'wb') as f:
-                        f.write(resp.read())
+                resp = requests.get(download_url, headers={"User-Agent": "FishRenamer"}, timeout=60)
+                resp.raise_for_status()
+                with open(zip_path, 'wb') as f:
+                    f.write(resp.content)
             except Exception as e:
                 return False, f"Download failed: {e}"
 
@@ -383,6 +388,11 @@ class ExifToolHandler:
             # The zip extracts to a subfolder like "exiftool-13.50_64"
             if progress_callback:
                 progress_callback(80, "Configuring...")
+
+            # A running ExifTool keeps exiftool.exe and its exiftool_files DLLs
+            # locked, so replacing them fails with "Access is denied" (and leaves
+            # a half-deleted install). Stop it first; it restarts on next use.
+            self.shutdown()
 
             # Find the extracted subfolder dynamically
             extracted_folder = next(
